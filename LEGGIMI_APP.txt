@@ -1,0 +1,65 @@
+TERRA SESSIONI - app di campagna per le sessioni GNSS
+=====================================================
+
+Cosa fa
+- Apre il file delle sessioni preparato in TERRA: Progetto reti GPS >
+  Esporta > "Per l'app di campagna..." (file .json).
+- Per ogni operatore: le sue sessioni, il vertice, il ricevitore, il nome
+  del file e gli orari previsti; lo schema della rete con la posizione del
+  telefono; distanza e direzione fino al vertice; pulsanti per navigare con
+  Google Maps o Mappe Apple.
+- Si scrivono altezza d'antenna, inizio e fine veri e note: tutto resta
+  salvato sul telefono.
+- Registro della campagna da mandare in ufficio: JSON (per TERRA) e CSV
+  (per Excel).
+- Funziona su Android e iPhone e, una volta installata, anche senza
+  internet. Il GPS del telefono funziona senza internet.
+
+Perche' va messa online
+Per avere GPS, funzionamento senza rete e installazione sul telefono, i
+browser vogliono che l'app arrivi da un indirizzo https. Basta farlo una
+volta: poi gli aggiornamenti si caricano sopra.
+
+COME PUBBLICARLA CON GITHUB PAGES (gratis, una volta sola)
+1. Crea un account su https://github.com (se non ce l'hai).
+2. In alto a destra "+" > "New repository". Nome: terra-sessioni.
+   Visibilita': Public (GitHub Pages gratuito vuole un repository
+   pubblico: si vede solo il codice dell'app, NON i dati delle sessioni,
+   che stanno solo sui telefoni). Premi "Create repository".
+3. Nella pagina del repository: "uploading an existing file". Trascina
+   TUTTI i file di questa cartella AppSessioni (index.html, sw.js,
+   manifest.webmanifest, icona-192.png, icona-512.png; non questo
+   LEGGIMI). Premi "Commit changes".
+4. Settings > Pages. In "Build and deployment": Source "Deploy from a
+   branch", Branch "main" e cartella "/ (root)". Premi Save.
+5. Dopo uno o due minuti l'app e' a questo indirizzo:
+      https://NOME-UTENTE.github.io/terra-sessioni/
+   (NOME-UTENTE e' il tuo nome su GitHub). Mandalo ai colleghi.
+
+INSTALLARLA SUL TELEFONO
+- Android (Chrome): apri l'indirizzo, menu (tre puntini) > "Installa app"
+  oppure "Aggiungi a schermata Home".
+- iPhone (Safari): apri l'indirizzo, pulsante Condividi > "Aggiungi alla
+  schermata Home".
+- La prima volta l'app chiede il permesso di usare la posizione:
+  rispondi Consenti.
+- Aprila una volta con internet: da quel momento funziona anche senza.
+
+IN CAMPAGNA
+1. In ufficio: in TERRA, Progetto reti GPS > "Per l'app di campagna...".
+   Manda il file .json ai colleghi (WhatsApp, email, cloud).
+2. Sul telefono: Progetti > "Apri file delle sessioni" e scegli il file.
+   Scegli chi sei (operatore): l'app mette in evidenza i tuoi vertici.
+3. Per ogni sessione: apri il tuo vertice, raggiungilo (Naviga o bussola),
+   scrivi l'altezza d'antenna, premi "Inizio ora" e a fine misura
+   "Fine ora". Le note servono per centramento, ostacoli, problemi.
+4. A fine giornata: Registro > "Invia registro (TERRA)".
+
+AGGIORNARE L'APP
+Quando arriva una nuova versione di TERRA con l'app cambiata, ricarica
+i file nel repository (stessa procedura del punto 3, "Add file" >
+"Upload files"). I telefoni prendono la versione nuova la prima volta
+che aprono l'app con internet; i dati salvati restano.
+
+Nota: la navigazione con Google Maps senza internet funziona solo se la
+zona e' stata scaricata prima in Google Maps ("Mappe offline").

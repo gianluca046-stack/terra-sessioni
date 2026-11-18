@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14271E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TERRA Sessioni">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icona-192.png">
+<link rel="apple-touch-icon" href="icona-192.png">
+<title>TERRA Sessioni</title>
+<style>
+  :root {
+    --fondo: #F3F4F0; --scuro: #14271E; --scuro2: #1F3A2D; --testo: #1D262B; --tenue: #6B7780; --bordo: #D7DBD4;
+    --verde: #2F6B4F; --arancio: #E8892B; --rosso: #D2382F; --blu: #1E7BC4; --bianco: #FFFFFF; --giallo: #FBEFC4;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--testo);
+    font: 16px/1.35 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { background: var(--scuro); color: #EDEFE8; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px; display: flex; align-items: center; gap: 10px; }
+  header img { width: 30px; height: 30px; border-radius: 6px; }
+  header .tit { flex: 1; min-width: 0; }
+  header .tit b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .tit span { font-size: 12.5px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  header button { background: var(--scuro2); color: #EDEFE8; border: 0; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  main { flex: 1; overflow-y: auto; padding: 12px 12px 90px; -webkit-overflow-scrolling: touch; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bianco); border-top: 1px solid var(--bordo); display: flex;
+    padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; background: none; border: 0; padding: 9px 4px 10px; font-size: 12.5px; color: var(--tenue); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  nav button svg { width: 24px; height: 24px; }
+  nav button.att { color: var(--verde); font-weight: 600; }
+  .scheda { background: var(--bianco); border: 1px solid var(--bordo); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .riga { display: flex; align-items: center; gap: 10px; }
+  .tenue { color: var(--tenue); font-size: 13.5px; }
+  .grande { font-size: 19px; font-weight: 700; }
+  .num { min-width: 40px; height: 40px; border-radius: 10px; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; padding: 0 6px; }
+  .stato { font-size: 12px; font-weight: 700; border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+  .st-dafare { background: #EEF0EC; color: var(--tenue); }
+  .st-corso { background: var(--giallo); color: #8A6400; }
+  .st-fatta { background: #DCEFE3; color: var(--verde); }
+  .mio { background: #F7FBF8; border-left: 4px solid var(--verde); }
+  .b, .b2 { display: inline-block; text-align: center; text-decoration: none; }
+  button.b { border: 0; border-radius: 10px; padding: 12px 14px; font-size: 16px; font-weight: 600; background: var(--verde); color: #fff; }
+  .b2 { border: 1px solid var(--bordo); border-radius: 10px; padding: 11px 13px; font-size: 15px; background: var(--bianco); color: var(--testo); }
+  button.arancio { background: var(--arancio); }
+  button.rosso { background: var(--rosso); }
+  button:disabled { opacity: .45; }
+  .bottoni { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .bottoni > * { flex: 1 1 auto; }
+  label.campo { display: block; font-size: 13px; color: var(--tenue); margin: 10px 0 4px; }
+  input[type=text], input[type=number], input[type=time], textarea, select {
+    width: 100%; font: inherit; font-size: 16px; padding: 10px; border: 1px solid var(--bordo); border-radius: 9px; background: #fff; color: var(--testo); }
+  textarea { min-height: 70px; resize: vertical; }
+  .seg { display: flex; border: 1px solid var(--bordo); border-radius: 9px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: #fff; padding: 10px; font-size: 15px; }
+  .seg button.att { background: var(--verde); color: #fff; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  td, th { padding: 7px 5px; border-bottom: 1px solid #ECEEEA; text-align: left; vertical-align: top; }
+  th { font-size: 12px; color: var(--tenue); font-weight: 600; }
+  .chip { display: inline-block; background: #EEF0EC; border-radius: 20px; padding: 3px 10px; font-size: 13px; margin: 2px 4px 2px 0; }
+  .filtri { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 6px; }
+  .filtri button { flex: 0 0 auto; border: 1px solid var(--bordo); background: #fff; border-radius: 20px; padding: 7px 13px; font-size: 14px; }
+  .filtri button.att { background: var(--scuro2); color: #fff; border-color: var(--scuro2); }
+  #schema { width: 100%; height: calc(100vh - 230px); min-height: 320px; background: #fff; border: 1px solid var(--bordo); border-radius: 12px; touch-action: none; display: block; }
+  .bussola { display: flex; align-items: center; gap: 16px; }
+  .bussola svg { width: 110px; height: 110px; flex: 0 0 auto; }
+  .avviso { background: var(--giallo); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 10px; }
+  .vuoto { text-align: center; color: var(--tenue); padding: 40px 20px; }
+  .vuoto img { width: 84px; opacity: .9; margin-bottom: 10px; }
+  .ora { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; }
+  #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--scuro); color: #fff;
+    padding: 10px 16px; border-radius: 10px; font-size: 14.5px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 9; max-width: 90%; text-align: center; }
+  #toast.vis { opacity: .95; }
+  .dialogo { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 8; }
+  .dialogo .box { background: #fff; width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  a.link { color: var(--blu); }
+</style>
+</head>
+<body>
+<header>
+  <img src="icona-192.png" alt="">
+  <div class="tit"><b id="h-tit">TERRA Sessioni</b><span id="h-sub">Sessioni GNSS in campagna</span></div>
+  <button id="h-oper" hidden></button>
+</header>
+<main id="main"></main>
+<nav id="nav" hidden>
+  <button data-v="sessioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Sessioni</button>
+  <button data-v="schema"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/><circle cx="12" cy="6" r="2"/><path d="M7.5 15.5 11 7.8M13 7.8l3.5 7.7M8 17h8"/></svg>Schema</button>
+  <button data-v="registro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></svg>Registro</button>
+  <button data-v="progetti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h7l2 2h9v10H3z"/></svg>Progetti</button>
+</nav>
+<div id="toast"></div>
+<input type="file" id="file" accept=".json,application/json" hidden>
+
+<script>
+"use strict";
+/* ======================================================================
+   TERRA Sessioni - app di campagna per le sessioni GNSS di Progetto reti GPS.
+   Legge il file .json esportato da TERRA ("Per l'app di campagna..."), funziona senza internet,
+   salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
+   registro della campagna in JSON e CSV. Misure in metri.
+   ====================================================================== */
+const VERSIONE = "1.0";
+const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function leggi(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function scrivi(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast("Non riesco a salvare sul telefono (memoria piena?)"); return false; } }
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("vis"); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("vis"), 2600); }
+function ora() { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function oggi() { const d = new Date(); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear(); }
+function metri(m) { return m >= 10000 ? (m / 1000).toFixed(1).replace(".", ",") + " km (" + Math.round(m).toLocaleString("it-IT") + " m)" : Math.round(m).toLocaleString("it-IT") + " m"; }
+
+/* ---------------------------------------------------------------- stato */
+let progetti = leggi(K_PROG, []);
+let st = Object.assign({ prog: null, vista: "sessioni", oper: "", sess: null, punto: null }, leggi(K_STATO, {}));
+let P = null, REG = {};          // progetto aperto e registro (per "sessione|punto")
+let pos = null, guarda = null, rotta = null;  // posizione GPS e direzione del telefono
+
+function salvaStato() { scrivi(K_STATO, { prog: st.prog, vista: st.vista, oper: st.oper, sess: st.sess, punto: st.punto }); }
+function apriProgetto(id) {
+  const x = progetti.find((p) => p.id === id);
+  P = x ? x.dati : null; st.prog = x ? id : null;
+  REG = P ? leggi(K_REG + id, {}) : {};
+  if (P && st.oper && st.oper !== "*" && !(P.operatori || []).includes(st.oper)) st.oper = "";
+}
+function salvaReg() { if (st.prog) scrivi(K_REG + st.prog, REG); }
+function reg(s, p) { const k = s + "|" + p; return REG[k] || (REG[k] = {}); }
+function punto(nome) { return (P.punti || []).find((p) => p.nome === nome); }
+function sessione(n) { return (P.sessioni || []).find((s) => s.n === n); }
+function nomeSess(s) { return "Sessione " + s.n + (s.nome ? " - " + s.nome : ""); }
+function miei(s) { return st.oper && st.oper !== "*" ? s.vertici.filter((v) => v.operatore === st.oper) : s.vertici; }
+function statoSess(s) {
+  const vv = miei(s); if (!vv.length) return "dafare";
+  const r = vv.map((v) => REG[s.n + "|" + v.punto] || {});
+  if (r.every((x) => x.fine)) return "fatta";
+  if (r.some((x) => x.inizio)) return "corso";
+  return "dafare";
+}
+const NOMI_STATO = { dafare: "da fare", corso: "in corso", fatta: "fatta" };
+
+/* ---------------------------------------------------------------- file */
+$("#file").addEventListener("change", (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    let d;
+    try { d = JSON.parse(r.result); } catch (err) { toast("Il file non e' leggibile"); return; }
+    if (!d || d.terra !== "sessioni-campagna" || !Array.isArray(d.sessioni)) { toast("Non e' un file di sessioni di TERRA (Progetto reti > Per l'app di campagna)"); return; }
+    const id = (d.progetto || "Rete") + " | " + (d.creato || "");
+    const vecchio = progetti.find((p) => p.id === id);
+    if (vecchio) vecchio.dati = d; else progetti.unshift({ id, nome: d.progetto || f.name, creato: d.creato || "", caricato: oggi() + " " + ora(), dati: d });
+    if (!scrivi(K_PROG, progetti)) return;
+    apriProgetto(id); st.sess = null; st.vista = (d.operatori || []).length && !st.oper ? "operatore" : "sessioni";
+    salvaStato(); disegna();
+    toast((vecchio ? "Aggiornato: " : "Caricato: ") + d.sessioni.length + " sessioni");
+  };
+  r.readAsText(f, "utf-8");
+});
+
+/* ---------------------------------------------------------------- viste */
+function vai(v, extra) { Object.assign(st, extra || {}); st.vista = v; salvaStato(); disegna(); $("#main").scrollTop = 0; }
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => vai(b.dataset.v, { sess: b.dataset.v === "sessioni" ? null : st.sess })));
+$("#h-oper").addEventListener("click", () => vai("operatore"));
+
+function disegna() {
+  const m = $("#main");
+  if (!P && st.vista !== "progetti") st.vista = "progetti";
+  $("#nav").hidden = !P;
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("att", b.dataset.v === st.vista || (st.vista === "dettaglio" && b.dataset.v === "sessioni")));
+  $("#h-tit").textContent = P ? P.progetto || "Rete GNSS" : "TERRA Sessioni";
+  $("#h-sub").textContent = P ? (P.sessioni.length + " sessioni" + (P.sistema ? " · " + P.sistema : "")) : "Sessioni GNSS in campagna";
+  const ho = $("#h-oper"); ho.hidden = !P || !(P.operatori || []).length; ho.textContent = st.oper && st.oper !== "*" ? st.oper : "Tutti";
+  if (st.vista !== "schema" && st.vista !== "dettaglio") fermaGps();
+  ({ progetti: vProgetti, operatore: vOperatore, sessioni: vSessioni, dettaglio: vDettaglio, schema: vSchema, registro: vRegistro }[st.vista] || vSessioni)(m);
+}
+
+function vProgetti(m) {
+  let h = "";
+  if (!progetti.length) {
+    h += `<div class="vuoto"><img src="icona-192.png" alt=""><div class="grande" style="color:var(--testo)">TERRA Sessioni</div>
+      <p>Apri il file delle sessioni preparato in TERRA:<br><b>Progetto reti GPS &gt; Esporta &gt; Per l'app di campagna...</b><br>
+      Mandalo sul telefono (WhatsApp, email, cloud) e aprilo qui. Poi l'app funziona anche senza internet.</p></div>`;
+  }
+  h += `<button class="b" style="width:100%" onclick="document.getElementById('file').click()">Apri file delle sessioni</button>`;
+  if (progetti.length) h += `<p class="tenue" style="margin:16px 4px 6px">Campagne sul telefono</p>`;
+  progetti.forEach((p, i) => {
+    const d = p.dati, r = leggi(K_REG + p.id, {});
+    const fatte = Object.values(r).filter((x) => x && x.fine).length;
+    h += `<div class="scheda ${p.id === st.prog ? "mio" : ""}"><div class="riga"><div style="flex:1;min-width:0">
+      <div style="font-weight:700">${esc(p.nome)}</div>
+      <div class="tenue">${d.sessioni.length} sessioni · ${(d.punti || []).length} punti · esportato da TERRA ${esc(p.creato)}</div>
+      <div class="tenue">${fatte} vertici registrati</div></div></div>
+      <div class="bottoni"><button class="b" onclick="usaProg(${i})">${p.id === st.prog ? "Aperta" : "Apri"}</button>
+      <button class="b2" onclick="togliProg(${i})">Elimina</button></div></div>`;
+  });
+  h += `<p class="tenue" style="text-align:center;margin-top:24px">TERRA Sessioni ${VERSIONE} · i dati restano su questo telefono</p>`;
+  m.innerHTML = h;
+}
+window.usaProg = (i) => { apriProgetto(progetti[i].id); vai((P.operatori || []).length && !st.oper ? "operatore" : "sessioni", { sess: null }); };
+window.togliProg = (i) => {
+  chiedi(`Elimino la campagna <b>${esc(progetti[i].nome)}</b> e il suo registro da questo telefono?<br><span class="tenue">Esporta prima il registro se ti serve.</span>`, "Elimina", () => {
+    const p = progetti.splice(i, 1)[0];
+    try { localStorage.removeItem(K_REG + p.id); } catch (e) {}
+    scrivi(K_PROG, progetti);
+    if (st.prog === p.id) { P = null; st.prog = null; }
+    salvaStato(); disegna();
+  }, true);
+};
+
+function vOperatore(m) {
+  let h = `<p class="grande" style="margin:6px 4px 12px">Chi sei?</p><p class="tenue" style="margin:0 4px 12px">L'app mette in evidenza i tuoi vertici e le tue sessioni.</p>`;
+  (P.operatori || []).forEach((o, i) => {
+    const n = P.sessioni.filter((s) => s.vertici.some((v) => v.operatore === o)).length;
+    h += `<button class="b2" style="width:100%;text-align:left;margin-bottom:8px;${st.oper === o ? "border-color:var(--verde);border-width:2px" : ""}" onclick="scegliOper(${i})">
+      <b>${esc(o)}</b> <span class="tenue">· ricevitore ${i + 1} · ${n} sessioni</span></button>`;
+  });
+  h += `<button class="b2" style="width:100%;text-align:left" onclick="scegliOper(-1)"><b>Tutti</b> <span class="tenue">· vedo tutti i vertici (capo squadra)</span></button>`;
+  m.innerHTML = h;
+}
+window.scegliOper = (i) => { st.oper = i < 0 ? "*" : P.operatori[i]; vai("sessioni", { sess: null }); };
+
+function vSessioni(m) {
+  const filtro = st.filtro || "tutte";
+  const lista = P.sessioni.filter((s) => (st.oper && st.oper !== "*" ? miei(s).length : true) && (filtro === "tutte" || statoSess(s) === filtro));
+  let h = `<div class="filtri">${["tutte", "dafare", "corso", "fatta"].map((f) => `<button class="${f === filtro ? "att" : ""}" onclick="filtra('${f}')">${f === "tutte" ? "Tutte" : NOMI_STATO[f]}</button>`).join("")}</div>`;
+  let giorno = null;
+  if (!lista.length) h += `<div class="vuoto">Nessuna sessione${filtro !== "tutte" ? " " + NOMI_STATO[filtro] : ""}${st.oper && st.oper !== "*" ? " per " + esc(st.oper) : ""}.</div>`;
+  lista.forEach((s) => {
+    if (s.data !== giorno) { giorno = s.data; h += `<p class="tenue" style="margin:14px 4px 6px;font-weight:600">${esc(s.data || "")}</p>`; }
+    const vv = miei(s), stt = statoSess(s);
+    const mio = st.oper && st.oper !== "*" ? vv[0] : null;
+    h += `<div class="scheda" onclick="apriSess(${s.n})" style="cursor:pointer"><div class="riga">
+      <div class="num" style="background:${esc(s.colore || "#2F6B4F")}">${s.n}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.nome || "Sessione " + s.n)}</div>
+      <div class="tenue">${esc(s.inizio)} - ${esc(s.fine)} · ${s.vertici.length} vertici</div></div>
+      <span class="stato st-${stt}">${NOMI_STATO[stt]}</span></div>
+      ${mio ? `<div style="margin-top:8px">Tu: <b>${esc(mio.punto)}</b> <span class="tenue">· ricevitore ${mio.ric} · file ${esc(mio.file)}</span></div>` : ""}
+      ${mio && (s.spostamenti || []).some((x) => x.ric === mio.ric) ? `<div class="tenue" style="margin-top:4px">Spostamento: ${esc(s.spostamenti.find((x) => x.ric === mio.ric).da)} &rarr; ${esc(mio.punto)}</div>` : ""}
+      </div>`;
+  });
+  m.innerHTML = h;
+}
+window.filtra = (f) => { st.filtro = f; disegna(); };
+window.apriSess = (n) => vai("dettaglio", { sess: n, punto: null });
+
+function vDettaglio(m) {
+  const s = sessione(st.sess); if (!s) { vai("sessioni"); return; }
+  const vv = s.vertici, mieiP = miei(s).map((v) => v.punto);
+  if (!st.punto || !vv.some((v) => v.punto === st.punto)) st.punto = (mieiP[0] || vv[0].punto);
+  const v = vv.find((x) => x.punto === st.punto), p = punto(v.punto), r = reg(s.n, v.punto);
+  let h = `<button class="b2" onclick="vai('sessioni',{sess:null})" style="margin-bottom:10px">&larr; Sessioni</button>
+    <div class="scheda"><div class="riga"><div class="num" style="background:${esc(s.colore)}">${s.n}</div>
+    <div style="flex:1"><div class="grande">${esc(nomeSess(s))}</div><div class="tenue">${esc(s.data)} · previsto ${esc(s.inizio)} - ${esc(s.fine)} · ${P.durata ? Math.round(P.durata) + " min" : ""}</div></div></div>
+    <table style="margin-top:8px"><tr><th>Ric.</th><th>Vertice</th><th>Operatore</th><th>Stato</th></tr>
+    ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP('${esc(x.punto)}')" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
+      <td>${x.ric}</td><td>${esc(x.punto)}${x.noto ? ' <span class="tenue">(noto)</span>' : ""}</td><td>${esc(x.operatore)}</td>
+      <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : "-"}</td></tr>`; }).join("")}
+    </table>
+    <div class="tenue" style="margin-top:8px">Basi: ${(s.basi || []).map((b) => esc(b[0] + " - " + b[1])).join(", ")}</div>
+    ${(s.spostamenti || []).length ? `<div class="tenue" style="margin-top:4px">Spostamenti: ${s.spostamenti.map((x) => "R" + x.ric + " " + esc(x.da) + " &rarr; " + esc(x.a)).join(", ")}</div>` : ""}
+    </div>`;
+  h += `<div class="scheda mio"><div class="grande">${esc(v.punto)} <span class="tenue" style="font-weight:400">· ricevitore ${v.ric} · ${esc(v.operatore || "")}</span></div>
+    <div class="tenue">Nome del file: <b style="color:var(--testo)">${esc(v.file)}</b></div>
+    ${p && p.q != null ? `<div class="tenue">Quota ${Number(p.q).toFixed(2).replace(".", ",")} m</div>` : ""}`;
+  if (p && p.lat != null) {
+    h += `<div class="bussola" style="margin-top:10px"><svg viewBox="-55 -55 110 110" id="bus"></svg><div id="bus-t" class="tenue">Attendo il GPS del telefono...</div></div>
+      <div class="bottoni"><a class="b2" style="text-align:center;text-decoration:none;color:var(--testo)" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}" target="_blank" rel="noopener">Naviga con Google Maps</a>
+      <a class="b2" style="text-align:center;text-decoration:none;color:var(--testo)" href="https://maps.apple.com/?daddr=${p.lat},${p.lon}" target="_blank" rel="noopener">Mappe Apple</a></div>
+      <div class="tenue" style="margin-top:4px">Lat ${p.lat.toFixed(7)} · Lon ${p.lon.toFixed(7)}</div>`;
+  } else {
+    h += `<div class="avviso" style="margin-top:10px">Senza latitudine e longitudine (in TERRA manca il sistema di coordinate): niente navigazione fino al vertice.</div>`;
+  }
+  h += `<label class="campo">Altezza d'antenna (m)</label>
+    <input type="number" inputmode="decimal" step="0.001" id="hant" value="${r.hant != null ? esc(r.hant) : ""}" placeholder="es. 1,567">
+    <label class="campo">Come e' misurata</label>
+    <div class="seg" id="tipoh">${["verticale", "inclinata"].map((t) => `<button class="${(r.tipoh || "verticale") === t ? "att" : ""}" data-t="${t}">${t}</button>`).join("")}</div>
+    <div class="riga" style="margin-top:12px;gap:8px">
+      <div style="flex:1"><label class="campo" style="margin-top:0">Inizio</label><input type="time" id="ini" value="${esc(r.inizio || "")}"></div>
+      <div style="flex:1"><label class="campo" style="margin-top:0">Fine</label><input type="time" id="fin" value="${esc(r.fine || "")}"></div></div>
+    <div class="bottoni"><button class="b arancio" id="b-ini">Inizio ora</button><button class="b" id="b-fin">Fine ora</button></div>
+    <label class="campo">Note (centramento, ostacoli, problemi...)</label>
+    <textarea id="note">${esc(r.note || "")}</textarea>
+    <div class="tenue" style="margin-top:6px">Tutto viene salvato subito sul telefono.</div></div>`;
+  m.innerHTML = h;
+  const salva = () => {
+    const x = reg(s.n, v.punto);
+    const hv = $("#hant").value.replace(",", ".").trim();
+    x.hant = hv === "" ? null : Number(hv);
+    x.inizio = $("#ini").value || ""; x.fine = $("#fin").value || ""; x.note = $("#note").value;
+    x.data = x.data || (x.inizio ? oggi() : "");
+    x.operatore = x.operatore || (st.oper && st.oper !== "*" ? st.oper : v.operatore);
+    salvaReg();
+  };
+  ["hant", "ini", "fin", "note"].forEach((id) => $("#" + id).addEventListener("change", salva));
+  $("#note").addEventListener("input", salva);
+  document.querySelectorAll("#tipoh button").forEach((b) => b.addEventListener("click", () => {
+    reg(s.n, v.punto).tipoh = b.dataset.t; salvaReg();
+    document.querySelectorAll("#tipoh button").forEach((c) => c.classList.toggle("att", c === b));
+  }));
+  $("#b-ini").addEventListener("click", () => { $("#ini").value = ora(); reg(s.n, v.punto).data = oggi(); salva(); toast("Inizio " + ora()); });
+  $("#b-fin").addEventListener("click", () => {
+    if (!$("#hant").value) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
+    if (!$("#ini").value) $("#ini").value = ora();
+    $("#fin").value = ora(); salva(); toast("Fine " + ora() + ": vertice registrato"); disegna();
+  });
+  if (p && p.lat != null) { avviaGps(); aggBussola(); }
+}
+window.scegliP = (nome) => { st.punto = nome; salvaStato(); disegna(); };
+
+/* ---------------------------------------------------------------- GPS e bussola */
+function avviaGps() {
+  if (guarda != null || !navigator.geolocation) { if (!navigator.geolocation) bTesto("Questo telefono non da' la posizione all'app."); return; }
+  guarda = navigator.geolocation.watchPosition((g) => { pos = g.coords; aggBussola(); aggSchemaPos(); },
+    (err) => bTesto(err.code === 1 ? "Posizione non permessa: abilitala per questa app nelle impostazioni del telefono." : "GPS non disponibile (" + err.message + ")."),
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 30000 });
+  if (window.DeviceOrientationEvent && !avviaGps._b) {
+    avviaGps._b = true;
+    const on = (e) => { const h = e.webkitCompassHeading != null ? e.webkitCompassHeading : (e.absolute && e.alpha != null ? 360 - e.alpha : null); if (h != null) { rotta = h; aggBussola(); } };
+    window.addEventListener("deviceorientationabsolute", on); window.addEventListener("deviceorientation", on);
+  }
+}
+function fermaGps() { if (guarda != null && navigator.geolocation) navigator.geolocation.clearWatch(guarda); guarda = null; }
+function bTesto(t) { const el = $("#bus-t"); if (el) el.innerHTML = t; }
+function distAz(la1, lo1, la2, lo2) {
+  const R = 6371000, r = Math.PI / 180, f1 = la1 * r, f2 = la2 * r, df = (la2 - la1) * r, dl = (lo2 - lo1) * r;
+  const a = Math.sin(df / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl / 2) ** 2;
+  const d = 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  const az = (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / r + 360) % 360;
+  return [d, az];
+}
+function aggBussola() {
+  const svg = $("#bus"); if (!svg || st.vista !== "dettaglio") return;
+  const p = punto(st.punto); if (!p || p.lat == null) return;
+  let h = `<circle r="50" fill="#fff" stroke="#D7DBD4" stroke-width="2"/>`;
+  const giro = rotta != null ? -rotta : 0;
+  h += `<g transform="rotate(${giro})"><text y="-37" text-anchor="middle" font-size="13" font-weight="700" fill="#D2382F">N</text></g>`;
+  if (!pos) { svg.innerHTML = h + `<circle r="4" fill="#6B7780"/>`; return; }
+  const [d, az] = distAz(pos.latitude, pos.longitude, p.lat, p.lon);
+  h += `<g transform="rotate(${az + giro})"><path d="M0 -42 L9 -12 L3 -14 L3 30 L-3 30 L-3 -14 L-9 -12 Z" fill="${d < 15 ? "#2F6B4F" : "#E8892B"}"/></g><circle r="4" fill="#14271E"/>`;
+  svg.innerHTML = h;
+  bTesto(`<div class="ora" style="color:var(--testo)">${metri(d)}</div><div>direzione ${Math.round(az)}° dal Nord${rotta == null ? " (la freccia e' rispetto al Nord)" : ""}</div>
+    <div>precisione GPS &plusmn; ${Math.round(pos.accuracy)} m</div>${d < 15 ? '<div style="color:var(--verde);font-weight:700">Sei sul vertice</div>' : ""}`);
+}
+
+/* ---------------------------------------------------------------- schema della rete */
+let vb = null;
+function piano() {
+  const pp = P.punti || [], geo = pp.length && pp.every((p) => p.lat != null);
+  let la0 = 0, lo0 = 0;
+  if (geo) { la0 = pp.reduce((a, p) => a + p.lat, 0) / pp.length; lo0 = pp.reduce((a, p) => a + p.lon, 0) / pp.length; }
+  const kx = 111320 * Math.cos(la0 * Math.PI / 180), ky = 110540;
+  const xy = geo ? (la, lo) => [(lo - lo0) * kx, -(la - la0) * ky] : null;
+  const pt = {};
+  pp.forEach((p) => { pt[p.nome] = geo ? xy(p.lat, p.lon) : [p.e, -p.n]; });
+  return { geo, xy, pt };
+}
+function vSchema(m) {
+  const sessV = st.sess;
+  m.innerHTML = `<div class="filtri" id="sf">${['<button data-s="" class="' + (!sessV ? "att" : "") + '">Tutte</button>']
+    .concat(P.sessioni.map((s) => `<button data-s="${s.n}" class="${s.n === sessV ? "att" : ""}" style="${s.n === sessV ? "background:" + s.colore + ";border-color:" + s.colore : ""}">S${s.n}${s.nome ? " " + esc(s.nome) : ""}</button>`)).join("")}</div>
+    <svg id="schema"></svg><div class="tenue" id="sch-t" style="margin-top:6px">Trascina per spostare, due dita o rotellina per lo zoom. Tocca un vertice per aprirlo.</div>`;
+  document.querySelectorAll("#sf button").forEach((b) => b.addEventListener("click", () => { st.sess = b.dataset.s ? Number(b.dataset.s) : null; salvaStato(); disegna(); }));
+  vb = null; schemaDisegna();
+  if (piano().geo) avviaGps();
+  const svg = $("#schema"), ptr = new Map(); let base = null;
+  svg.addEventListener("pointerdown", (e) => { svg.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]); base = { vb: vb.slice(), ptr: new Map(ptr), mosso: false }; });
+  svg.addEventListener("pointermove", (e) => {
+    if (!ptr.has(e.pointerId) || !base) return;
+    ptr.set(e.pointerId, [e.clientX, e.clientY]);
+    const r = svg.getBoundingClientRect(), k = base.vb[2] / r.width;
+    const a = [...ptr.values()], b0 = [...base.ptr.values()];
+    if (a.length === 1 && b0.length === 1) {
+      const dx = a[0][0] - b0[0][0], dy = a[0][1] - b0[0][1];
+      if (Math.abs(dx) + Math.abs(dy) > 4) base.mosso = true;
+      vb = [base.vb[0] - dx * k, base.vb[1] - dy * k, base.vb[2], base.vb[3]];
+    } else if (a.length >= 2 && b0.length >= 2) {
+      base.mosso = true;
+      const d1 = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]), d0 = Math.hypot(b0[0][0] - b0[1][0], b0[0][1] - b0[1][1]) || 1;
+      const f = d0 / d1, cx = (b0[0][0] + b0[1][0]) / 2 - r.left, cy = (b0[0][1] + b0[1][1]) / 2 - r.top;
+      const wx = base.vb[0] + cx * k, wy = base.vb[1] + cy * (base.vb[3] / r.height);
+      vb = [wx - (wx - base.vb[0]) * f, wy - (wy - base.vb[1]) * f, base.vb[2] * f, base.vb[3] * f];
+    }
+    svg.setAttribute("viewBox", vb.join(" "));
+  });
+  const su = (e) => {
+    if (base && !base.mosso && ptr.size === 1) {
+      const t = e.target.closest && e.target.closest("[data-p]");
+      if (t) { const p = t.dataset.p, s = P.sessioni.find((x) => (st.sess ? x.n === st.sess : true) && x.vertici.some((v) => v.punto === p)); if (s) vai("dettaglio", { sess: s.n, punto: p }); }
+    }
+    ptr.delete(e.pointerId); base = ptr.size ? { vb: vb.slice(), ptr: new Map(ptr), mosso: true } : null;
+  };
+  svg.addEventListener("pointerup", su); svg.addEventListener("pointercancel", su);
+  svg.addEventListener("wheel", (e) => {
+    e.preventDefault(); const r = svg.getBoundingClientRect(), f = e.deltaY > 0 ? 1.2 : 1 / 1.2;
+    const wx = vb[0] + (e.clientX - r.left) / r.width * vb[2], wy = vb[1] + (e.clientY - r.top) / r.height * vb[3];
+    vb = [wx - (wx - vb[0]) * f, wy - (wy - vb[1]) * f, vb[2] * f, vb[3] * f]; svg.setAttribute("viewBox", vb.join(" "));
+  }, { passive: false });
+}
+function schemaDisegna() {
+  const svg = $("#schema"); if (!svg) return;
+  const { pt } = piano(), pp = P.punti || [];
+  const xs = Object.values(pt).map((c) => c[0]), ys = Object.values(pt).map((c) => c[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const L = Math.max(x1 - x0, y1 - y0, 100), mg = L * 0.12;
+  const r = svg.getBoundingClientRect(), asp = r.height / Math.max(r.width, 1) || 1;
+  if (!vb) { const w = x1 - x0 + 2 * mg, hh = y1 - y0 + 2 * mg, W = Math.max(w, hh / asp); vb = [(x0 + x1) / 2 - W / 2, (y0 + y1) / 2 - W * asp / 2, W, W * asp]; }
+  svg.setAttribute("viewBox", vb.join(" "));
+  const u = L / 300;   // unita' grafica
+  const sel = st.sess ? sessione(st.sess) : null;
+  let h = "";
+  P.sessioni.forEach((s) => (s.basi || []).forEach((b) => {
+    const a = pt[b[0]], c = pt[b[1]]; if (!a || !c) return;
+    const vis = !sel || sel.n === s.n;
+    h += `<line x1="${a[0]}" y1="${a[1]}" x2="${c[0]}" y2="${c[1]}" stroke="${vis ? s.colore : "#D5D9D3"}" stroke-width="${(vis && sel ? 2.6 : 1.4) * u}" stroke-linecap="round"/>`;
+  }));
+  const occ = sel ? new Set(sel.vertici.map((v) => v.punto)) : null;
+  const mieiS = new Set(sel ? miei(sel).map((v) => v.punto) : []);
+  pp.forEach((p) => {
+    const c = pt[p.nome]; if (!c) return;
+    const f = (occ && !occ.has(p.nome)) ? 0.45 : 1;
+    if (mieiS.has(p.nome) && st.oper && st.oper !== "*") h += `<circle cx="${c[0]}" cy="${c[1]}" r="${9 * u}" fill="none" stroke="#1E7BC4" stroke-width="${2.2 * u}"/>`;
+    h += `<g data-p="${esc(p.nome)}" opacity="${f}">` + (p.noto
+      ? `<path d="M${c[0]} ${c[1] - 6 * u} L${c[0] + 5.2 * u} ${c[1] + 3 * u} L${c[0] - 5.2 * u} ${c[1] + 3 * u} Z" fill="#DCE9E1" stroke="#2F6B4F" stroke-width="${1.4 * u}"/>`
+      : `<circle cx="${c[0]}" cy="${c[1]}" r="${3.8 * u}" fill="#E8892B" stroke="#26352E" stroke-width="${u}"/>`)
+      + `<circle cx="${c[0]}" cy="${c[1]}" r="${12 * u}" fill="transparent"/>`
+      + `<text x="${c[0] + 7 * u}" y="${c[1] - 6 * u}" font-size="${10 * u}" fill="${p.noto ? "#2F6B4F" : "#1D262B"}" font-weight="${p.noto ? 700 : 400}">${esc(p.nome)}</text></g>`;
+  });
+  h += `<g id="io"></g>`;
+  svg.innerHTML = h;
+  aggSchemaPos();
+}
+function aggSchemaPos() {
+  const g = $("#io"); if (!g || !pos) return;
+  const pl = piano(); if (!pl.geo) return;
+  const c = pl.xy(pos.latitude, pos.longitude), L = vb ? vb[2] : 1000, u = L / 300;
+  g.innerHTML = `<circle cx="${c[0]}" cy="${c[1]}" r="${Math.max(pos.accuracy, 0)}" fill="rgba(30,123,196,.12)"/><circle cx="${c[0]}" cy="${c[1]}" r="${5 * u}" fill="#1E7BC4" stroke="#fff" stroke-width="${1.6 * u}"/>`;
+  const t = $("#sch-t");
+  if (t && st.sess) {
+    const s = sessione(st.sess), v = s && miei(s)[0], p = v && punto(v.punto);
+    if (p && p.lat != null) { const [d, az] = distAz(pos.latitude, pos.longitude, p.lat, p.lon); t.innerHTML = `Tu (punto blu) &rarr; ${esc(p.nome)}: <b>${metri(d)}</b>, direzione ${Math.round(az)}°`; }
+  }
+}
+
+/* ---------------------------------------------------------------- registro */
+function righeRegistro() {
+  const out = [];
+  P.sessioni.forEach((s) => s.vertici.forEach((v) => {
+    const r = REG[s.n + "|" + v.punto]; if (!r || (!r.inizio && !r.fine && r.hant == null && !r.note)) return;
+    out.push({ sessione: s.n, nome_sessione: s.nome || "", data: r.data || s.data || "", punto: v.punto, ricevitore: v.ric, operatore: r.operatore || v.operatore || "",
+      file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", inizio: r.inizio || "", fine: r.fine || "",
+      inizio_previsto: s.inizio, fine_previsto: s.fine, note: r.note || "" });
+  }));
+  return out;
+}
+function vRegistro(m) {
+  const rr = righeRegistro();
+  let h = `<div class="scheda"><div class="grande">Registro della campagna</div><div class="tenue">${rr.length} vertici registrati su ${P.sessioni.reduce((a, s) => a + s.vertici.length, 0)}</div>
+    <div class="bottoni"><button class="b" onclick="esporta('json')">Invia registro (TERRA)</button><button class="b2" onclick="esporta('csv')">CSV per Excel</button></div>
+    <div class="tenue" style="margin-top:8px">Il file JSON si importa in TERRA. Se c'e' campo puoi mandarlo subito (WhatsApp, email), altrimenti resta qui e lo mandi dopo.</div></div>`;
+  if (!rr.length) h += `<div class="vuoto">Ancora nessun vertice registrato.</div>`;
+  else h += `<div class="scheda" style="overflow-x:auto"><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
+    ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:'${esc(x.punto)}'})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
+      <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
+  m.innerHTML = h;
+}
+window.esporta = async (tipo) => {
+  const rr = righeRegistro();
+  if (!rr.length) { toast("Il registro e' vuoto"); return; }
+  const chi = st.oper && st.oper !== "*" ? st.oper : "tutti";
+  const base = (P.progetto || "rete").replace(/[^\w\-]+/g, "_") + "_registro_" + chi.replace(/[^\w\-]+/g, "_") + "_" + oggi().replace(/\//g, "");
+  let testo, nome, mime;
+  if (tipo === "json") {
+    testo = JSON.stringify({ terra: "registro-campagna", versione: 1, progetto: P.progetto, creato: P.creato, operatore: chi, esportato: oggi() + " " + ora(), app: VERSIONE, righe: rr }, null, 1);
+    nome = base + ".json"; mime = "application/json";
+  } else {
+    const c = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "inizio", "fine", "inizio_previsto", "fine_previsto", "note"];
+    const q = (v) => { v = v == null ? "" : typeof v === "number" ? String(v).replace(".", ",") : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    testo = "﻿" + c.join(";") + "\r\n" + rr.map((x) => c.map((k) => q(x[k])).join(";")).join("\r\n") + "\r\n";
+    nome = base + ".csv"; mime = "text/csv";
+  }
+  const file = new File([testo], nome, { type: mime });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome }); return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = nome; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast("Salvato: " + nome);
+};
+
+/* ---------------------------------------------------------------- dialogo */
+function chiedi(html, si, fai, pericolo) {
+  const d = document.createElement("div"); d.className = "dialogo";
+  d.innerHTML = `<div class="box"><div style="margin-bottom:14px">${html}</div><div class="bottoni"><button class="b2" data-x="no">Annulla</button><button class="b ${pericolo ? "rosso" : ""}" data-x="si">${esc(si)}</button></div></div>`;
+  d.addEventListener("click", (e) => { const x = e.target.dataset.x; if (x || e.target === d) { d.remove(); if (x === "si") fai(); } });
+  document.body.appendChild(d);
+}
+
+/* ---------------------------------------------------------------- avvio */
+if (st.prog) apriProgetto(st.prog);
+disegna();
+window.addEventListener("resize", () => { if (st.vista === "schema") { vb = null; schemaDisegna(); } });
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
