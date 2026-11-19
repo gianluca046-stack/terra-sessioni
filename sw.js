@@ -1,5 +1,5 @@
 // TERRA Sessioni: tiene l'app sul telefono, cosi' si apre anche senza internet.
-const CACHE = "terra-sessioni-2.0";
+const CACHE = "terra-sessioni-2.1";
 const FILE = ["./", "index.html", "manifest.webmanifest", "icona-192.png", "icona-512.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
@@ -10,11 +10,13 @@ self.addEventListener("activate", (e) => {
 async function condiviso(req) {
   try {
     const fd = await req.formData();
-    const f = fd.getAll("file").find((x) => x && typeof x.text === "function");
-    if (f) {
-      const c = await caches.open("terra-condiviso");
-      await c.put("condiviso", new Response(await f.text(), { headers: { "Content-Type": "application/json", "X-Nome": encodeURIComponent(f.name || "") } }));
-    }
+    const ff = [], campi = [];
+    for (const [k, v] of fd.entries()) { campi.push(k); if (v && typeof v === "object" && typeof v.arrayBuffer === "function") ff.push(v); }
+    const f = ff.find((x) => /\.json$/i.test(x.name || "")) || ff.slice().sort((a, b) => b.size - a.size)[0];
+    const c = await caches.open("terra-condiviso");
+    const h = { "Content-Type": "application/octet-stream", "X-N": String(ff.length), "X-Campi": encodeURIComponent(campi.join(",")) };
+    if (f) Object.assign(h, { "X-Nome": encodeURIComponent(f.name || ""), "X-Tipo": encodeURIComponent(f.type || ""), "X-Dim": String(f.size) });
+    await c.put("condiviso", new Response(f ? await f.arrayBuffer() : new ArrayBuffer(0), { headers: h }));
   } catch (e) { /* l'app dira' "Nessun file ricevuto" */ }
   return Response.redirect("./?condiviso=1", 303);
 }

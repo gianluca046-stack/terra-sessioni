@@ -117,7 +117,7 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.0";
+const VERSIONE = "2.1";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
@@ -191,9 +191,21 @@ function statoSess(s) {
 const NOMI_STATO = { dafare: "da fare", corso: "in corso", fatta: "fatta" };
 
 /* ---------------------------------------------------------------- file */
-function importaTesto(testo, nomeFile) {
-  let d;
-  try { d = JSON.parse(testo); } catch (err) { toast("Il file non e' leggibile"); return; }
+function leggiJson(testo) {
+  testo = String(testo || "").replace(/^\ufeff/, "");
+  try { return JSON.parse(testo); } catch (e) {}
+  const a = testo.indexOf("{"), b = testo.lastIndexOf("}");       // testo con qualcosa prima o dopo
+  if (a >= 0 && b > a) try { return JSON.parse(testo.slice(a, b + 1)); } catch (e) {}
+  return undefined;
+}
+function importaTesto(testo, nomeFile, diag) {
+  const d = leggiJson(testo);
+  if (d === undefined) {
+    const t = String(testo || "");
+    chiedi(`<b>Il file non e' leggibile.</b><div class="tenue" style="margin-top:6px">File: ${esc(nomeFile || "?")}${diag ? "<br>" + diag : ""}<br>Caratteri letti: ${t.length}${t.length ? "<br>Inizio: <code>" + esc(t.slice(0, 60)) + "</code>" : ""}</div>
+      <p class="tenue">Deve essere il file .json di Progetto reti &gt; Esporta &gt; Per l'app di campagna. Se il problema resta, salva il file sul telefono e usa "Apri file delle sessioni".</p>`, "Apri file delle sessioni", () => $("#file").click());
+    return;
+  }
   if (!d || d.terra !== "sessioni-campagna" || !Array.isArray(d.sessioni)) { toast("Non e' un file di sessioni di TERRA (Progetto reti > Per l'app di campagna)"); return; }
   const id = (d.progetto || "Rete") + " | " + (d.creato || "");
   const vecchio = progetti.find((p) => p.id === id);
@@ -218,10 +230,12 @@ async function prendiCondiviso() {
     const c = await caches.open("terra-condiviso");
     const r = await c.match("condiviso");
     if (!r) { toast("Nessun file ricevuto"); return; }
-    const nome = decodeURIComponent(r.headers.get("X-Nome") || "");
-    const testo = await r.text();
+    const h = (k) => { try { return decodeURIComponent(r.headers.get(k) || ""); } catch (e) { return r.headers.get(k) || ""; } };
+    const nome = h("X-Nome"), buf = await r.arrayBuffer();
     await c.delete("condiviso");
-    importaTesto(testo, nome);
+    let testo = new TextDecoder("utf-8").decode(buf);
+    if (leggiJson(testo) === undefined && buf.byteLength) { try { testo = new TextDecoder("utf-16le").decode(buf); if (leggiJson(testo) === undefined) testo = new TextDecoder("utf-8").decode(buf); } catch (e) {} }
+    importaTesto(testo, nome, "Condiviso: " + esc(h("X-N") || "?") + " file, tipo " + esc(h("X-Tipo") || "-") + ", " + esc(h("X-Dim") || "0") + " byte" + (h("X-Campi") ? ", campi " + esc(h("X-Campi")) : ""));
   } catch (e) { toast("Non riesco a leggere il file condiviso"); }
 }
 
