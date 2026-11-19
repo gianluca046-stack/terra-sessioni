@@ -117,7 +117,7 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.2";
+const VERSIONE = "2.3";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
@@ -129,6 +129,128 @@ function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add
 function ora() { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
 function oggi() { const d = new Date(); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear(); }
 function metri(m) { return m >= 10000 ? (m / 1000).toFixed(1).replace(".", ",") + " km (" + Math.round(m).toLocaleString("it-IT") + " m)" : Math.round(m).toLocaleString("it-IT") + " m"; }
+
+/* ---------------------------------------------------------------- lingua (italiano / inglese)
+   L'interfaccia si scrive in italiano; in inglese la traduce un osservatore sul documento, frase per frase.
+   I dati (nomi, note, registro esportato) restano come sono. */
+let LINGUA = leggi("terra_sess_lingua", "") || (String(navigator.language || "it").toLowerCase().indexOf("it") === 0 ? "it" : "en");
+const EN_ESATTE = {
+  "Sessioni": "Sessions", "Schema": "Network", "Registro": "Log", "Progetti": "Projects", "Sessioni GNSS in campagna": "GNSS field sessions",
+  "Apri il file delle sessioni preparato in TERRA:": "Open the sessions file prepared in TERRA:",
+  "Progetto reti GPS > Esporta > Per l'app di campagna...": "GPS network design > Export > For the field app...",
+  "Mandalo sul telefono (WhatsApp, email, cloud) e aprilo qui. Poi l'app funziona anche senza internet.": "Send it to the phone (WhatsApp, email, cloud) and open it here. Then the app also works without internet.",
+  "Apri file delle sessioni": "Open sessions file", "Campagne sul telefono": "Campaigns on this phone", "Apri": "Open", "Aperta": "Opened", "Elimina": "Delete",
+  "Elimino la campagna": "Delete the campaign", "e il suo registro da questo telefono?": "and its log from this phone?", "Esporta prima il registro se ti serve.": "Export the log first if you need it.",
+  "Chi sei?": "Who are you?", "L'app mette in evidenza i tuoi vertici e le tue sessioni.": "The app highlights your vertices and your sessions.",
+  "Tutti": "All", "Tutte": "All", "da fare": "to do", "in corso": "in progress", "fatta": "done",
+  "· vedo tutti i vertici, senza un ricevitore mio": "· I see all vertices, without a receiver of my own",
+  "Sono anche capo squadra": "I am also the team leader",
+  "con il mio ricevitore: vedo e compilo tutte le sessioni e i vertici dei colleghi, ricevo tutti gli allarmi di fine sessione; i controlli GDOP a tempo li chiede solo per i miei vertici":
+    "with my own receiver: I see and fill in all sessions and my colleagues' vertices, I get all end-of-session alarms; timed GDOP checks are asked only for my vertices",
+  "Tu:": "You:", "← Sessioni": "← Sessions", "Ric.": "Rec.", "Vertice": "Vertex", "Operatore": "Operator", "Stato": "Status", "(noto)": "(known)",
+  "Nome del file:": "File name:", "Attendo il GPS del telefono...": "Waiting for the phone GPS...", "Naviga con Google Maps": "Navigate with Google Maps", "Mappe Apple": "Apple Maps",
+  "Senza latitudine e longitudine (in TERRA manca il sistema di coordinate): niente navigazione fino al vertice.": "No latitude and longitude (no coordinate system in TERRA): no navigation to the vertex.",
+  "Altezza d'antenna (m)": "Antenna height (m)", "Come e' misurata": "How it is measured", "verticale": "vertical", "inclinata": "slant",
+  "Inizio": "Start", "Fine": "End", "Inizio ora": "Start now", "Fine ora": "End now", "Note (centramento, ostacoli, problemi...)": "Notes (centring, obstructions, problems...)", "Note": "Notes",
+  "Controlli GDOP": "GDOP checks", "Controllo GDOP": "GDOP check", "Controllo ora": "Check now", "Inserisci": "Enter", "Di nuovo disponibile": "Available again",
+  "Controller non disponibile": "Controller not available", "Previsto": "Planned", "Fatto": "Done", "Esito": "Result", "(tocca per inserirlo)": "(tap to enter it)", "Nessun controllo.": "No checks.",
+  "a tempo non attivi (Registro > Impostazioni)": "timed checks off (Log > Settings)",
+  "non eseguito": "not done", "non verificabile": "not verifiable", "oltre soglia": "over threshold",
+  "controller spento o scarico": "controller off or flat battery", "controller non disponibile": "controller not available", "senza collegamento al ricevitore": "no connection to the receiver", "altro": "other",
+  "Foto": "Photos", "del vertice o del centramento (restano sul telefono e vanno nel registro)": "of the vertex or the centring (they stay on the phone and go into the log)",
+  "Aggiungi foto": "Add photo", "Foto non disponibili su questo telefono.": "Photos not available on this phone.", "Elimino questa foto dal telefono?": "Delete this photo from the phone?",
+  "finita adesso": "just ended", "Chiudi": "Close", "Apri la sessione": "Open the session", "Ferma la registrazione": "Stop recording", "Ferma la registrazione su": "Stop recording on", "Ferma la registrazione e premi Fine ora.": "Stop recording and press End now.", "Inizio:": "Beginning:", "su": "on", "e premi Fine ora.": "and press End now.",
+  "PDOP (se c'e')": "PDOP (if available)", "Satelliti": "Satellites", "Motivo": "Reason", "Anche per i prossimi controlli di questo vertice": "Also for the next checks of this vertex",
+  "non li chiede piu' e nel registro risultano \"non verificabile\"": "they are no longer asked and appear as \"not verifiable\" in the log",
+  "Fra 2 minuti": "In 2 minutes", "Annulla": "Cancel", "Salva controllo": "Save check", "Conferma": "Confirm",
+  "Registro della campagna": "Campaign log", "Registro completo (con foto)": "Full log (with photos)", "CSV per Excel": "CSV for Excel",
+  "Impostazioni della campagna": "Campaign settings", "Stato condiviso tra i telefoni": "Shared status between phones", "spento: i dati restano solo qui": "off: data stays only on this phone",
+  "Durata della sessione (min)": "Session duration (min)", "fine = ultimo ricevitore partito + durata": "end = last receiver started + duration",
+  "Controllo GDOP ogni (min)": "GDOP check every (min)", "0 = nessun controllo a tempo": "0 = no timed checks", "Soglia GDOP": "GDOP threshold",
+  "oltre: avviso e \"oltre soglia\" nel registro": "above it: warning and \"over threshold\" in the log", "Suono degli allarmi": "Alarm sound",
+  "Schermo acceso durante le sessioni": "Screen on during sessions", "a schermo spento l'app non puo' suonare": "with the screen off the app cannot ring", "Prova allarme": "Test alarm",
+  "e iscriviti all'argomento": "app and subscribe to the topic", "copia": "copy", "Ancora nessun vertice registrato.": "No vertex recorded yet.", "Vertici": "Vertices",
+  "H ant. (m)": "Ant. h (m)", "manca": "missing", "Prev.": "Plan.", "Lingua": "Language",
+  "Trascina per spostare, due dita o rotellina per lo zoom. Tocca un vertice per aprirlo.": "Drag to move, two fingers or wheel to zoom. Tap a vertex to open it.",
+  "Sei sul vertice": "You are on the vertex", "Posizione non permessa: abilitala per questa app nelle impostazioni del telefono.": "Location not allowed: enable it for this app in the phone settings.",
+  "Questo telefono non da' la posizione all'app.": "This phone does not give its location to the app.",
+  "Copiato": "Copied", "Foto salvata": "Photo saved", "Il registro e' vuoto": "The log is empty", "Nessun file ricevuto": "No file received",
+  "Non e' un file di sessioni di TERRA (Progetto reti > Per l'app di campagna)": "Not a TERRA sessions file (GPS network design > For the field app)",
+  "Non riesco a leggere il file condiviso": "Cannot read the shared file", "Non riesco a salvare la foto": "Cannot save the photo", "Non riesco a salvare sul telefono (memoria piena?)": "Cannot save on the phone (memory full?)",
+  "Preparo il registro...": "Preparing the log...", "Scrivi il GDOP, oppure spunta Controller non disponibile": "Enter the GDOP, or tick Controller not available",
+  "Scrivi l'altezza d'antenna": "Enter the antenna height", "Segnato: GDOP non verificabile": "Marked: GDOP not verifiable", "Controllo salvato": "Check saved",
+  "Registro pronto:": "Log ready:", "Condividi": "Share", "Il file non e' leggibile.": "The file cannot be read.",
+  "Deve essere il file .json di Progetto reti > Esporta > Per l'app di campagna. Se il problema resta, salva il file sul telefono e usa \"Apri file delle sessioni\".":
+    "It must be the .json file from GPS network design > Export > For the field app. If the problem persists, save the file on the phone and use \"Open sessions file\".",
+  "Fine sessione": "End of session", "Controllo GDOP ": "GDOP check", "Prova dell'allarme di fine sessione": "End-of-session alarm test",
+  "Durata e controlli GDOP valgono per tutti: cambiati qui, arrivano agli altri telefoni.": "Duration and GDOP checks apply to everyone: changed here, they reach the other phones.",
+  "Allarme anche a telefono bloccato: installa l'app": "Alarm also with the phone locked: install the"
+};
+const EN_RX = [
+  [/^Fine sessione alle (\d\d:\d\d)$/, "End of session at $1"], [/^Fine sessione (\d+)$/, "End of session $1"], [/^TERRA: fine sessione (\d+)$/, "TERRA: end of session $1"],
+  [/^tra (\d+):(\d\d)$/, "in $1:$2"], [/^tra (\d+) h (\d+) min$/, "in $1 h $2 min"], [/^finita da (\d+) min$/, "ended $1 min ago"],
+  [/^Partiti (\d+) di (\d+)$/, "Started $1 of $2"], [/^· la fine si calcola quando parte l'ultimo ricevitore \(\+ (\d+) min\)$/, "· the end is calculated when the last receiver starts (+ $1 min)"],
+  [/^tutti i (\d+) ricevitori partiti · ultimo alle (\d\d:\d\d) \+ (\d+) min(?: · (\d+) gia' chiusi)?$/, (m, a, b, c, d) => "all " + a + " receivers started · last at " + b + " + " + c + " min" + (d ? " · " + d + " already closed" : "")],
+  [/^Sessione chiusa: tutti i (\d+) ricevitori hanno la fine\.$/, "Session closed: all $1 receivers have an end time."],
+  [/^Sono passati (\d+) minuti dall'ultimo ricevitore partito \(fine alle$/, "$1 minutes have passed since the last receiver started (end at"],
+  [/^Nessuna sessione( da fare| in corso| fatta)?( per (.+))?\.$/, (m, f, p, o) => "No sessions" + (f ? " " + EN_ESATTE[f.trim()] : "") + (o ? " for " + o : "") + "."],
+  [/^Controllo n\. (\d+) delle (\d\d:\d\d) da fare$/, "Check no. $1 at $2 to do"], [/^Controller non disponibile dalle (\d\d:\d\d) \((.*)\)$/, (m, a, b) => "Controller not available since " + a + " (" + tr(b) + ")"],
+  [/^ogni (\d+) min, soglia (.+)$/, "every $1 min, threshold $2"], [/^da (.+)$/, "by $1"],
+  [/^(.+): da adesso i controlli GDOP non si chiedono e risultano "non verificabile"\.$/, "$1: from now on GDOP checks are not asked and appear as \"not verifiable\"."],
+  [/^(\d+) vertici registrati su (\d+) · (\d+) controlli GDOP$/, "$1 vertices recorded out of $2 · $3 GDOP checks"],
+  [/^· (\d+) ok · (\d+) oltre soglia · (\d+) non eseguiti · (\d+) non verificabili$/, "· $1 ok · $2 over threshold · $3 not done · $4 not verifiable"],
+  [/^Inizio (\d\d:\d\d)$/, "Start $1"], [/^Fine (\d\d:\d\d): vertice registrato$/, "End $1: vertex recorded"], [/^Salvato: (.+)$/, "Saved: $1"],
+  [/^Aggiornato: (\d+) sessioni$/, "Updated: $1 sessions"], [/^Caricato: (\d+) sessioni$/, "Loaded: $1 sessions"], [/^GDOP (.+) oltre la soglia (.+)$/, "GDOP $1 over the threshold $2"],
+  [/^Caratteri letti: (\d+)$/, "Characters read: $1"], [/^Quota (.+)$/, "Height $1"], [/^Basi: (.*)$/, "Baselines: $1"], [/^Spostamenti: (.*)$/, "Moves: $1"], [/^Spostamento: (.*)$/, "Move: $1"],
+  [/^Tu \(punto blu\) → (.+)$/, "You (blue dot) → $1"], [/^, direzione (\d+)°$/, ", direction $1°"],
+  [/^Alle (\d\d:\d\d): ferma il ricevitore(?: su (.+))? e premi Fine ora\.$/, (m, a, b) => "At " + a + ": stop the receiver" + (b ? " on " + b : "") + " and press End now."],
+  [/^Sessione (\d+), (.+): leggi il GDOP sul ricevitore\.$/, "Session $1, $2: read the GDOP on the receiver."],
+  [/^TERRA Sessioni (\S+) · i dati restano su questo telefono$/, "TERRA Sessioni $1 · data stays on this phone"],
+  [/^Apri (\S+)$/, "Open $1"]
+];
+const EN_FRASI = [
+  ["Il registro completo si apre su qualsiasi telefono o PC: tabella dei vertici, tabella dei controlli e foto.", "The full log opens on any phone or PC: vertices table, checks table and photos."],
+  [" Contiene i dati di tutti i telefoni arrivati dal canale; le foto sono solo quelle di questo telefono.", " It contains the data of all phones received through the channel; the photos are only those of this phone."],
+  ["Tutto viene salvato subito sul telefono", "Everything is saved on the phone right away"], [" e mandato agli altri quando c'e' internet", " and sent to the others when there is internet"],
+  ["non in linea: i dati partono quando torna internet", "offline: data is sent when internet comes back"], ["non in linea", "offline"], ["in linea", "online"], ["collegamento...", "connecting..."], ["da inviare", "to send"],
+  ["esportato da TERRA", "exported from TERRA"], ["vertici registrati", "vertices recorded"], ["controllo in piu'", "extra check"], ["controllo n.", "check no."],
+  ["(la freccia e' rispetto al Nord)", "(the arrow is relative to North)"], ["dal Nord", "from North"], ["precisione GPS", "GPS accuracy"], ["GPS non disponibile", "GPS not available"],
+  ["durata", "duration"], ["previsto", "planned"]
+];
+const EN_PAROLE = { "Sessione": "Session", "sessioni": "sessions", "Sessioni": "Sessions", "vertici": "vertices", "ricevitore": "receiver", "ricevitori": "receivers", "punti": "points",
+  "dalle": "since", "delle": "at", "direzione": "direction", "capo": "leader" };
+const EN_PAROLE_RX = new RegExp("(^|[^A-Za-zÀ-ÿ])(" + Object.keys(EN_PAROLE).join("|") + ")(?=$|[^A-Za-zÀ-ÿ])", "g");
+function tr(t) {
+  if (LINGUA !== "en" || !t || !/[A-Za-zà-ù]/.test(t)) return t;
+  const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(t);
+  let x = m[2];
+  if (Object.prototype.hasOwnProperty.call(EN_ESATTE, x)) return m[1] + EN_ESATTE[x] + m[3];
+  for (const [r, s] of EN_RX) if (r.test(x)) return m[1] + x.replace(r, s) + m[3];
+  for (const [a, b] of EN_FRASI) if (x.indexOf(a) >= 0) x = x.split(a).join(b);
+  x = x.replace(EN_PAROLE_RX, (q, p, w) => p + EN_PAROLE[w]);
+  return m[1] + x + m[3];
+}
+function traduciNodo(n) {
+  if (n.nodeType === 3) { const p = n.parentElement; if (p && !p.closest("textarea,script,style,.nt,code")) { const t = tr(n.nodeValue); if (t !== n.nodeValue) n.nodeValue = t; } return; }
+  if (n.nodeType !== 1 || n.closest && n.closest("textarea,script,style,.nt,code")) return;
+  const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT), nn = [];
+  while (w.nextNode()) nn.push(w.currentNode);
+  nn.forEach(traduciNodo);
+  [n].concat([...n.querySelectorAll("[placeholder],[aria-label]")]).forEach((e) => {
+    ["placeholder", "aria-label"].forEach((a) => { const v = e.getAttribute && e.getAttribute(a); if (v) { const t = tr(v); if (t !== v) e.setAttribute(a, t); } });
+  });
+}
+if (LINGUA === "en") {
+  document.documentElement.lang = "en";
+  new MutationObserver((mm) => mm.forEach((m) => m.addedNodes.forEach(traduciNodo))).observe(document.body, { childList: true, subtree: true });
+  traduciNodo(document.body);
+}
+window.cambiaLingua = (l) => { scrivi("terra_sess_lingua", l); location.reload(); };
+function sceltaLingua() {
+  return `<div class="riga nt" style="justify-content:center;gap:8px;margin-top:14px"><span class="tenue">${LINGUA === "en" ? "Language" : "Lingua"}</span>
+    <button class="b2" style="padding:7px 12px;${LINGUA === "it" ? "border-color:var(--verde);border-width:2px" : ""}" onclick="cambiaLingua('it')">Italiano</button>
+    <button class="b2" style="padding:7px 12px;${LINGUA === "en" ? "border-color:var(--verde);border-width:2px" : ""}" onclick="cambiaLingua('en')">English</button></div>`;
+}
 
 /* ---------------------------------------------------------------- stato */
 let progetti = leggi(K_PROG, []);
@@ -278,7 +400,7 @@ function vProgetti(m) {
       <div class="bottoni"><button class="b" onclick="usaProg(${i})">${p.id === st.prog ? "Aperta" : "Apri"}</button>
       <button class="b2" onclick="togliProg(${i})">Elimina</button></div></div>`;
   });
-  h += `<p class="tenue" style="text-align:center;margin-top:24px">TERRA Sessioni ${VERSIONE} · i dati restano su questo telefono</p>`;
+  h += `<p class="tenue" style="text-align:center;margin-top:24px">TERRA Sessioni ${VERSIONE} · i dati restano su questo telefono</p>` + sceltaLingua();
   m.innerHTML = h;
 }
 window.usaProg = (i) => { apriProgetto(progetti[i].id); vai((P.operatori || []).length && !st.oper ? "operatore" : "sessioni", { sess: null }); };
@@ -293,7 +415,7 @@ window.togliProg = (i) => {
 };
 
 function vOperatore(m) {
-  let h = `<p class="grande" style="margin:6px 4px 12px">Chi sei?</p><p class="tenue" style="margin:0 4px 12px">L'app mette in evidenza i tuoi vertici e le tue sessioni.</p>`;
+  let h = sceltaLingua() + `<p class="grande" style="margin:6px 4px 12px">Chi sei?</p><p class="tenue" style="margin:0 4px 12px">L'app mette in evidenza i tuoi vertici e le tue sessioni.</p>`;
   (P.operatori || []).forEach((o, i) => {
     const n = P.sessioni.filter((s) => s.vertici.some((v) => v.operatore === o)).length;
     h += `<button class="b2" style="width:100%;text-align:left;margin-bottom:8px;${st.oper === o ? "border-color:var(--verde);border-width:2px" : ""}" onclick="scegliOper(${i})">
@@ -733,8 +855,9 @@ function interessa(s) { return vedoTutto() || s.vertici.some((v) => v.operatore 
 function avvisoFine(s) {
   const f = finePrevista(s);
   if (!f || f - Date.now() < 30000 || !IMP.condividi) return;
-  metti(CANALE + "-avvisi", "Sessione " + s.n + (s.nome ? " " + s.nome : "") + ": fine alle " + hhmm(f) + ". Ferma i ricevitori e premi Fine ora nell'app.",
-    { "Title": "TERRA: fine sessione " + s.n, "Priority": "5", "Tags": "alarm_clock", "At": String(Math.round(f / 1000)) });
+  metti(CANALE + "-avvisi", "Sessione " + s.n + (s.nome ? " " + s.nome : "") + ": fine alle " + hhmm(f) + ". Ferma i ricevitori e premi Fine ora nell'app.\n" +
+    "Session " + s.n + ": end at " + hhmm(f) + ". Stop the receivers and press End now in the app.",
+    { "Title": "TERRA: fine sessione / end of session " + s.n, "Priority": "5", "Tags": "alarm_clock", "At": String(Math.round(f / 1000)) });
 }
 let audio = null;
 function sbloccaAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {} }
@@ -756,6 +879,7 @@ function vibra(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e)
 function notifica(titolo, testo, tag) {
   try {
     if (!("Notification" in window) || Notification.permission !== "granted" || !navigator.serviceWorker) return;
+    titolo = tr(titolo); testo = tr(testo);
     navigator.serviceWorker.ready.then((r) => r.showNotification(titolo, { body: testo, tag, renotify: true, requireInteraction: true, icon: "icona-192.png", badge: "icona-192.png", vibrate: [600, 200, 600, 200, 600] })).catch(() => {});
   } catch (e) {}
 }
@@ -854,7 +978,7 @@ window.chiediGdop = (sn, nomeP, k, prev) => {
       <div style="flex:1"><label class="campo">GDOP</label><input type="number" inputmode="decimal" step="0.1" id="g-gdop"></div>
       <div style="flex:1"><label class="campo">PDOP (se c'e')</label><input type="number" inputmode="decimal" step="0.1" id="g-pdop"></div>
       <div style="flex:1"><label class="campo">Satelliti</label><input type="number" inputmode="numeric" step="1" id="g-sat"></div></div></div>
-    <div id="g-no" hidden><label class="campo">Motivo</label><select id="g-mot">${MOTIVI.map((m) => `<option>${esc(m)}</option>`).join("")}</select>
+    <div id="g-no" hidden><label class="campo">Motivo</label><select id="g-mot">${MOTIVI.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("")}</select>
       <div class="interr" style="border:0"><div>Anche per i prossimi controlli di questo vertice<div class="tenue">non li chiede piu' e nel registro risultano "non verificabile"</div></div><input type="checkbox" id="g-tutti"></div></div>
     <label class="campo">Note</label><input type="text" id="g-nota" placeholder="es. perdita segnale, ostacoli">
     <div class="bottoni">${auto ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
@@ -893,7 +1017,7 @@ window.senzaController = (sn, nomeP, si) => {
   if (!si) { fai(); return; }
   const d = document.createElement("div"); d.className = "dialogo";
   d.innerHTML = `<div class="box"><div class="grande">Controller non disponibile</div><div class="tenue">${esc(nomeP)}: da adesso i controlli GDOP non si chiedono e risultano "non verificabile".</div>
-    <label class="campo">Motivo</label><select id="sc-mot">${MOTIVI.map((m) => `<option>${esc(m)}</option>`).join("")}</select>
+    <label class="campo">Motivo</label><select id="sc-mot">${MOTIVI.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("")}</select>
     <div class="bottoni"><button class="b2" data-x="no">Annulla</button><button class="b" data-x="si">Conferma</button></div></div>`;
   d.addEventListener("click", (e) => { const x = e.target.dataset.x; if (!x) return; const mot = $("#sc-mot").value; d.remove(); if (x === "si") fai(mot); });
   document.body.appendChild(d);
@@ -997,7 +1121,7 @@ function vRegistro(m) {
   if (!rr.length) h += `<div class="vuoto">Ancora nessun vertice registrato.</div>`;
   else h += `<div class="scheda" style="overflow-x:auto"><b>Vertici</b><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
     ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:'${esc(x.punto)}'})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
-      <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
+      <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue nt">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
   if (cc.length) h += `<div class="scheda" style="overflow-x:auto"><b>Controlli GDOP</b> <span class="tenue">· ${nOk} ok · ${nF} oltre soglia · ${nN} non eseguiti · ${nV} non verificabili</span>
     <table><tr><th>S.</th><th>Vertice</th><th>Prev.</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>
     ${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${classeEsito(c.esito)}">${esc(c.esito)}${c.motivo ? '<div class="tenue">' + esc(c.motivo) + "</div>" : ""}</td></tr>`).join("")}</table></div>`;
