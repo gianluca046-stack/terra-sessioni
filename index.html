@@ -93,7 +93,7 @@
   <button data-v="progetti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h7l2 2h9v10H3z"/></svg>Progetti</button>
 </nav>
 <div id="toast"></div>
-<input type="file" id="file" accept=".json,application/json" hidden>
+<input type="file" id="file" accept=".json,application/json,text/plain,application/octet-stream" hidden>
 
 <script>
 "use strict";
@@ -144,24 +144,39 @@ function statoSess(s) {
 const NOMI_STATO = { dafare: "da fare", corso: "in corso", fatta: "fatta" };
 
 /* ---------------------------------------------------------------- file */
+function importaTesto(testo, nomeFile) {
+  let d;
+  try { d = JSON.parse(testo); } catch (err) { toast("Il file non e' leggibile"); return; }
+  if (!d || d.terra !== "sessioni-campagna" || !Array.isArray(d.sessioni)) { toast("Non e' un file di sessioni di TERRA (Progetto reti > Per l'app di campagna)"); return; }
+  const id = (d.progetto || "Rete") + " | " + (d.creato || "");
+  const vecchio = progetti.find((p) => p.id === id);
+  if (vecchio) vecchio.dati = d; else progetti.unshift({ id, nome: d.progetto || nomeFile || "Rete", creato: d.creato || "", caricato: oggi() + " " + ora(), dati: d });
+  if (!scrivi(K_PROG, progetti)) return;
+  apriProgetto(id); st.sess = null; st.vista = (d.operatori || []).length && !st.oper ? "operatore" : "sessioni";
+  salvaStato(); disegna();
+  toast((vecchio ? "Aggiornato: " : "Caricato: ") + d.sessioni.length + " sessioni");
+}
 $("#file").addEventListener("change", (e) => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
   const r = new FileReader();
-  r.onload = () => {
-    let d;
-    try { d = JSON.parse(r.result); } catch (err) { toast("Il file non e' leggibile"); return; }
-    if (!d || d.terra !== "sessioni-campagna" || !Array.isArray(d.sessioni)) { toast("Non e' un file di sessioni di TERRA (Progetto reti > Per l'app di campagna)"); return; }
-    const id = (d.progetto || "Rete") + " | " + (d.creato || "");
-    const vecchio = progetti.find((p) => p.id === id);
-    if (vecchio) vecchio.dati = d; else progetti.unshift({ id, nome: d.progetto || f.name, creato: d.creato || "", caricato: oggi() + " " + ora(), dati: d });
-    if (!scrivi(K_PROG, progetti)) return;
-    apriProgetto(id); st.sess = null; st.vista = (d.operatori || []).length && !st.oper ? "operatore" : "sessioni";
-    salvaStato(); disegna();
-    toast((vecchio ? "Aggiornato: " : "Caricato: ") + d.sessioni.length + " sessioni");
-  };
+  r.onload = () => importaTesto(r.result, f.name);
   r.readAsText(f, "utf-8");
 });
+/* file condiviso da WhatsApp, email ecc. (Android: Condividi > TERRA Sessioni): lo mette da parte sw.js */
+async function prendiCondiviso() {
+  if (!/[?&]condiviso=/.test(location.search) || !("caches" in window)) return;
+  history.replaceState(null, "", location.pathname);
+  try {
+    const c = await caches.open("terra-condiviso");
+    const r = await c.match("condiviso");
+    if (!r) { toast("Nessun file ricevuto"); return; }
+    const nome = decodeURIComponent(r.headers.get("X-Nome") || "");
+    const testo = await r.text();
+    await c.delete("condiviso");
+    importaTesto(testo, nome);
+  } catch (e) { toast("Non riesco a leggere il file condiviso"); }
+}
 
 /* ---------------------------------------------------------------- viste */
 function vai(v, extra) { Object.assign(st, extra || {}); st.vista = v; salvaStato(); disegna(); $("#main").scrollTop = 0; }
@@ -504,6 +519,7 @@ function chiedi(html, si, fai, pericolo) {
 /* ---------------------------------------------------------------- avvio */
 if (st.prog) apriProgetto(st.prog);
 disegna();
+prendiCondiviso();
 window.addEventListener("resize", () => { if (st.vista === "schema") { vb = null; schemaDisegna(); } });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
