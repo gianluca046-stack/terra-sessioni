@@ -77,6 +77,20 @@
   .dialogo { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 8; }
   .dialogo .box { background: #fff; width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
   a.link { color: var(--blu); }
+  .fineprev { background: #EAF3FB; border: 1px solid #C9DFF2; border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+  .fineprev.scaduta { background: #FDE7E5; border-color: #F2C3BF; }
+  .cd { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .foto { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .foto div { position: relative; width: 96px; height: 96px; border-radius: 9px; overflow: hidden; background: #EEF0EC; }
+  .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto button { position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; border-radius: 13px; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 15px; line-height: 26px; padding: 0; }
+  .foto span { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.5); color: #fff; font-size: 11px; text-align: center; padding: 1px 0; }
+  .fuori { color: var(--rosso); font-weight: 700; }
+  .allarme .box { border-top: 6px solid var(--rosso); }
+  .allarme .grande { font-size: 24px; }
+  .interr { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #ECEEEA; }
+  .interr input[type=checkbox] { width: 24px; height: 24px; flex: 0 0 auto; }
+  .interr input[type=number] { width: 90px; flex: 0 0 auto; text-align: right; }
 </style>
 </head>
 <body>
@@ -103,8 +117,9 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "1.0";
+const VERSIONE = "2.0";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
+const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -120,15 +135,47 @@ let progetti = leggi(K_PROG, []);
 let st = Object.assign({ prog: null, vista: "sessioni", oper: "", sess: null, punto: null }, leggi(K_STATO, {}));
 let P = null, REG = {};          // progetto aperto e registro (per "sessione|punto")
 let pos = null, guarda = null, rotta = null;  // posizione GPS e direzione del telefono
+let CTRL = {}, IMP = {}, OUT = [], SYNC = { ultimo: "", inviato: 0 }, SUONATI = {}, CANALE = "", inLinea = null;  // controlli, impostazioni, condivisione
+let DEV = leggi(K_DEV, ""); if (!DEV) { DEV = Math.random().toString(36).slice(2, 10); scrivi(K_DEV, DEV); }
+function impBase() { return { condividi: true, durata: P && P.durata ? Math.round(P.durata) : 30, gdop_min: 0, gdop_soglia: 6, suono: true, schermo: true, ts: 0 }; }
+function durata() { return Math.max(1, Number(IMP.durata) || 30); }
+/* impronta del file delle sessioni: stesso file = stesso canale, senza il file il canale non si indovina */
+function impronta(t) {
+  let out = "";
+  for (let k = 0; k < 4; k++) {
+    let h1 = 0xdeadbeef ^ k, h2 = 0x41c6ce57 ^ (k * 7919);
+    for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    out += (h1 >>> 0).toString(16).padStart(8, "0");
+  }
+  return out;
+}
+/* "19/11/2026" + "16:05" -> millisecondi */
+function tsDa(data, hhmm) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(data || oggi()) || /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(oggi());
+  const t = /^(\d{1,2}):(\d{2})/.exec(hhmm || ""); if (!t) return null;
+  return new Date(+m[3], +m[2] - 1, +m[1], +t[1], +t[2]).getTime();
+}
+function hhmm(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
 
 function salvaStato() { scrivi(K_STATO, { prog: st.prog, vista: st.vista, oper: st.oper, sess: st.sess, punto: st.punto }); }
 function apriProgetto(id) {
   const x = progetti.find((p) => p.id === id);
   P = x ? x.dati : null; st.prog = x ? id : null;
   REG = P ? leggi(K_REG + id, {}) : {};
+  CTRL = P ? leggi(K_CTRL + id, {}) : {};
+  IMP = P ? Object.assign(impBase(), leggi(K_IMP + id, {})) : {};
+  OUT = P ? leggi(K_OUT + id, []) : [];
+  SYNC = P ? Object.assign({ ultimo: "", inviato: 0 }, leggi(K_SYNC + id, {})) : { ultimo: "", inviato: 0 };
+  SUONATI = P ? leggi(K_SUON + id, {}) : {};
+  CANALE = P ? "terra-" + impronta(JSON.stringify(P)) : "";
   if (P && st.oper && st.oper !== "*" && !(P.operatori || []).includes(st.oper)) st.oper = "";
+  if (P) avviaCondivisione();
 }
 function salvaReg() { if (st.prog) scrivi(K_REG + st.prog, REG); }
+function salvaCtrl() { if (st.prog) scrivi(K_CTRL + st.prog, CTRL); }
+function salvaImp() { if (st.prog) scrivi(K_IMP + st.prog, IMP); }
 function reg(s, p) { const k = s + "|" + p; return REG[k] || (REG[k] = {}); }
 function punto(nome) { return (P.punti || []).find((p) => p.nome === nome); }
 function sessione(n) { return (P.sessioni || []).find((s) => s.n === n); }
@@ -189,7 +236,7 @@ function disegna() {
   $("#nav").hidden = !P;
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("att", b.dataset.v === st.vista || (st.vista === "dettaglio" && b.dataset.v === "sessioni")));
   $("#h-tit").textContent = P ? P.progetto || "Rete GNSS" : "TERRA Sessioni";
-  $("#h-sub").textContent = P ? (P.sessioni.length + " sessioni" + (P.sistema ? " · " + P.sistema : "")) : "Sessioni GNSS in campagna";
+  testata();
   const ho = $("#h-oper"); ho.hidden = !P || !(P.operatori || []).length; ho.textContent = st.oper && st.oper !== "*" ? st.oper : "Tutti";
   if (st.vista !== "schema" && st.vista !== "dettaglio") fermaGps();
   ({ progetti: vProgetti, operatore: vOperatore, sessioni: vSessioni, dettaglio: vDettaglio, schema: vSchema, registro: vRegistro }[st.vista] || vSessioni)(m);
@@ -255,6 +302,7 @@ function vSessioni(m) {
       <div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.nome || "Sessione " + s.n)}</div>
       <div class="tenue">${esc(s.inizio)} - ${esc(s.fine)} · ${s.vertici.length} vertici</div></div>
       <span class="stato st-${stt}">${NOMI_STATO[stt]}</span></div>
+      ${rigaFine(s, true)}
       ${mio ? `<div style="margin-top:8px">Tu: <b>${esc(mio.punto)}</b> <span class="tenue">· ricevitore ${mio.ric} · file ${esc(mio.file)}</span></div>` : ""}
       ${mio && (s.spostamenti || []).some((x) => x.ric === mio.ric) ? `<div class="tenue" style="margin-top:4px">Spostamento: ${esc(s.spostamenti.find((x) => x.ric === mio.ric).da)} &rarr; ${esc(mio.punto)}</div>` : ""}
       </div>`;
@@ -271,12 +319,13 @@ function vDettaglio(m) {
   const v = vv.find((x) => x.punto === st.punto), p = punto(v.punto), r = reg(s.n, v.punto);
   let h = `<button class="b2" onclick="vai('sessioni',{sess:null})" style="margin-bottom:10px">&larr; Sessioni</button>
     <div class="scheda"><div class="riga"><div class="num" style="background:${esc(s.colore)}">${s.n}</div>
-    <div style="flex:1"><div class="grande">${esc(nomeSess(s))}</div><div class="tenue">${esc(s.data)} · previsto ${esc(s.inizio)} - ${esc(s.fine)} · ${P.durata ? Math.round(P.durata) + " min" : ""}</div></div></div>
+    <div style="flex:1"><div class="grande">${esc(nomeSess(s))}</div><div class="tenue">${esc(s.data)} · previsto ${esc(s.inizio)} - ${esc(s.fine)} · durata ${durata()} min</div></div></div>
     <table style="margin-top:8px"><tr><th>Ric.</th><th>Vertice</th><th>Operatore</th><th>Stato</th></tr>
     ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP('${esc(x.punto)}')" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
       <td>${x.ric}</td><td>${esc(x.punto)}${x.noto ? ' <span class="tenue">(noto)</span>' : ""}</td><td>${esc(x.operatore)}</td>
       <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : "-"}</td></tr>`; }).join("")}
     </table>
+    ${rigaFine(s, false)}
     <div class="tenue" style="margin-top:8px">Basi: ${(s.basi || []).map((b) => esc(b[0] + " - " + b[1])).join(", ")}</div>
     ${(s.spostamenti || []).length ? `<div class="tenue" style="margin-top:4px">Spostamenti: ${s.spostamenti.map((x) => "R" + x.ric + " " + esc(x.da) + " &rarr; " + esc(x.a)).join(", ")}</div>` : ""}
     </div>`;
@@ -301,29 +350,56 @@ function vDettaglio(m) {
     <div class="bottoni"><button class="b arancio" id="b-ini">Inizio ora</button><button class="b" id="b-fin">Fine ora</button></div>
     <label class="campo">Note (centramento, ostacoli, problemi...)</label>
     <textarea id="note">${esc(r.note || "")}</textarea>
-    <div class="tenue" style="margin-top:6px">Tutto viene salvato subito sul telefono.</div></div>`;
+    <div class="tenue" style="margin-top:6px">Tutto viene salvato subito sul telefono${IMP.condividi ? " e mandato agli altri quando c'e' internet" : ""}.</div></div>`;
+  // controlli GDOP del vertice
+  const cc = righeControlli().filter((c) => c.sessione === s.n && c.punto === v.punto);
+  h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Controlli GDOP</b><div class="tenue">${IMP.gdop_min > 0 ? "ogni " + IMP.gdop_min + " min, soglia " + String(IMP.gdop_soglia).replace(".", ",") : "a tempo non attivi (Registro &gt; Impostazioni)"}</div></div>
+    <button class="b2" onclick="chiediGdop(${s.n},'${esc(v.punto)}',0,Date.now())">Controllo ora</button></div>
+    ${cc.length ? `<table style="margin-top:6px"><tr><th>Previsto</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>${cc.map((c) => `<tr><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${c.esito === "ok" ? "" : "fuori"}">${esc(c.esito)}</td></tr>`).join("")}</table>` : `<div class="tenue" style="margin-top:6px">Nessun controllo.</div>`}</div>`;
+  // foto
+  h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Foto</b><div class="tenue">del vertice o del centramento (restano sul telefono e vanno nel registro)</div></div>
+    <button class="b2" id="b-foto">Aggiungi foto</button></div><div class="foto" id="foto-l"></div>
+    <input type="file" id="file-foto" accept="image/*" capture="environment" hidden></div>`;
   m.innerHTML = h;
   const salva = () => {
     const x = reg(s.n, v.punto);
     const hv = $("#hant").value.replace(",", ".").trim();
     x.hant = hv === "" ? null : Number(hv);
-    x.inizio = $("#ini").value || ""; x.fine = $("#fin").value || ""; x.note = $("#note").value;
-    x.data = x.data || (x.inizio ? oggi() : "");
+    const ini = $("#ini").value || "", fin = $("#fin").value || "";
+    x.data = x.data || (ini ? oggi() : "");
+    if (ini !== (x.inizio || "")) x.ini_ts = ini ? tsDa(x.data || s.data, ini) : null;
+    if (fin !== (x.fine || "")) { x.fin_ts = fin ? tsDa(x.data || s.data, fin) : null; if (x.fin_ts && x.ini_ts && x.fin_ts < x.ini_ts) x.fin_ts += 86400000; }
+    x.inizio = ini; x.fine = fin; x.note = $("#note").value;
     x.operatore = x.operatore || (st.oper && st.oper !== "*" ? st.oper : v.operatore);
-    salvaReg();
+    registrato(s, v.punto);
   };
   ["hant", "ini", "fin", "note"].forEach((id) => $("#" + id).addEventListener("change", salva));
-  $("#note").addEventListener("input", salva);
+  $("#note").addEventListener("input", () => { clearTimeout(salva._t); salva._t = setTimeout(salva, 1200); });
   document.querySelectorAll("#tipoh button").forEach((b) => b.addEventListener("click", () => {
-    reg(s.n, v.punto).tipoh = b.dataset.t; salvaReg();
+    reg(s.n, v.punto).tipoh = b.dataset.t; registrato(s, v.punto);
     document.querySelectorAll("#tipoh button").forEach((c) => c.classList.toggle("att", c === b));
   }));
-  $("#b-ini").addEventListener("click", () => { $("#ini").value = ora(); reg(s.n, v.punto).data = oggi(); salva(); toast("Inizio " + ora()); });
+  $("#b-ini").addEventListener("click", () => {
+    const x = reg(s.n, v.punto), t = Date.now();
+    x.data = oggi(); x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio;
+    chiediPermessi();
+    salva(); toast("Inizio " + x.inizio);
+    avvisoFine(s);
+    disegna();
+  });
   $("#b-fin").addEventListener("click", () => {
     if (!$("#hant").value) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
-    if (!$("#ini").value) $("#ini").value = ora();
-    $("#fin").value = ora(); salva(); toast("Fine " + ora() + ": vertice registrato"); disegna();
+    const x = reg(s.n, v.punto), t = Date.now();
+    if (!$("#ini").value) { x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio; x.data = x.data || oggi(); }
+    x.fin_ts = t; x.fine = hhmm(t); $("#fin").value = x.fine;
+    salva(); toast("Fine " + x.fine + ": vertice registrato"); disegna();
   });
+  $("#b-foto").addEventListener("click", () => $("#file-foto").click());
+  $("#file-foto").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try { await fotoAggiungi(s.n, v.punto, f); toast("Foto salvata"); mostraFoto(s.n, v.punto); } catch (err) { toast("Non riesco a salvare la foto"); }
+  });
+  mostraFoto(s.n, v.punto);
   if (p && p.lat != null) { avviaGps(); aggBussola(); }
 }
 window.scegliP = (nome) => { st.punto = nome; salvaStato(); disegna(); };
@@ -462,47 +538,472 @@ function aggSchemaPos() {
   }
 }
 
+/* ---------------------------------------------------------------- condivisione tra i telefoni (ntfy.sh)
+   Ogni telefono manda a un canale comune (nome ricavato dal file delle sessioni) i vertici che registra, i
+   controlli GDOP e le impostazioni; legge quelli degli altri ogni 15 secondi quando c'e' internet. Senza rete
+   tutto resta in coda sul telefono e parte appena torna il segnale. Le foto non passano dal canale. */
+const NTFY = leggi("terra_sess_ntfy", "") || "https://ntfy.sh/";   // (il primo serve solo per le prove)
+const dormi = (ms) => new Promise((r) => setTimeout(r, ms));
+function testata() {
+  const el = $("#h-sub");
+  if (!P) { el.textContent = "Sessioni GNSS in campagna"; return; }
+  let t = P.sessioni.length + " sessioni" + (P.sistema ? " · " + P.sistema : "");
+  if (IMP.condividi) t += inLinea === false || !navigator.onLine ? " · non in linea" + (OUT.length ? " (" + OUT.length + " da inviare)" : "") : inLinea ? " · in linea" : " · collegamento...";
+  el.textContent = t;
+}
+function segnaLinea(v) { if (inLinea !== v) { inLinea = v; testata(); } }
+function metti(topic, corpo, intest) { OUT.push({ t: topic, b: corpo, h: intest || null }); scrivi(K_OUT + st.prog, OUT); svuota(); }
+function invia(msg) {
+  if (!IMP.condividi || !CANALE) return;
+  msg.v = 1; msg.d = DEV;
+  metti(CANALE, JSON.stringify(msg));
+}
+async function svuota() {
+  if (svuota.in || !OUT.length || !navigator.onLine || !IMP.condividi) return;
+  svuota.in = true;
+  const prog = st.prog;
+  try {
+    while (OUT.length && st.prog === prog) {
+      const m = OUT[0];
+      let r;
+      try { r = await fetch(NTFY + m.t, { method: "POST", body: m.b, headers: m.h || {} }); } catch (e) { segnaLinea(false); break; }
+      if (r.ok || (r.status >= 400 && r.status < 500 && r.status !== 429)) { OUT.shift(); scrivi(K_OUT + prog, OUT); segnaLinea(true); }
+      else { segnaLinea(r.status !== 429 ? false : inLinea); break; }
+      if (OUT.length > 5) await dormi(400);
+    }
+  } finally { svuota.in = false; testata(); }
+}
+async function ricevi() {
+  if (!P || !IMP.condividi || !CANALE || !navigator.onLine || ricevi.in) return;
+  ricevi.in = true;
+  const prog = st.prog;
+  try {
+    const r = await fetch(NTFY + CANALE + "/json?poll=1&since=" + encodeURIComponent(SYNC.ultimo || "all"));
+    if (!r.ok) { segnaLinea(false); return; }
+    const t = await r.text();
+    if (st.prog !== prog) return;
+    let cambia = false;
+    t.split("\n").forEach((l) => {
+      if (!l.trim()) return;
+      let e, m; try { e = JSON.parse(l); } catch (x) { return; }
+      if (e.event !== "message") return;
+      SYNC.ultimo = e.id;
+      try { m = JSON.parse(e.message); } catch (x) { return; }
+      if (m && m.v === 1 && m.d !== DEV && applica(m)) cambia = true;
+    });
+    scrivi(K_SYNC + prog, SYNC); segnaLinea(true);
+    if (cambia) { salvaReg(); salvaCtrl(); salvaImp(); aggiornaVista(); }
+  } catch (e) { segnaLinea(false); } finally { ricevi.in = false; }
+}
+function applica(m) {
+  if (m.k === "r" && m.s != null && m.p) {
+    const k = m.s + "|" + m.p, cur = REG[k];
+    if (cur && (cur.ts || 0) >= (m.ts || 0)) return false;
+    REG[k] = Object.assign({}, m.x || {}, { ts: m.ts || 0, da: m.d });
+    return true;
+  }
+  if (m.k === "c" && m.x && m.x.id) {
+    const cur = CTRL[m.x.id];
+    if (cur && (cur.ts || 0) >= (m.ts || 0)) return false;
+    CTRL[m.x.id] = Object.assign({}, m.x, { ts: m.ts || 0, da: m.d });
+    return true;
+  }
+  if (m.k === "i" && m.x) {
+    if ((IMP.ts || 0) >= (m.ts || 0)) return false;
+    ["durata", "gdop_min", "gdop_soglia"].forEach((k) => { if (m.x[k] != null) IMP[k] = m.x[k]; });
+    IMP.ts = m.ts;
+    return true;
+  }
+  return false;
+}
+/* un vertice cambiato su questo telefono: si salva e si manda agli altri */
+function registrato(s, nomeP) {
+  const x = reg(s.n, nomeP);
+  x.ts = Date.now(); x.da = DEV;
+  salvaReg();
+  const y = Object.assign({}, x); delete y.ts; delete y.da;
+  if (y.note && y.note.length > 1500) y.note = y.note.slice(0, 1500);
+  invia({ k: "r", s: s.n, p: nomeP, ts: x.ts, x: y });
+}
+function inviaCtrl(c) { invia({ k: "c", ts: c.ts, x: Object.assign({}, c, { da: undefined }) }); }
+function inviaImp() { invia({ k: "i", ts: IMP.ts, x: { durata: IMP.durata, gdop_min: IMP.gdop_min, gdop_soglia: IMP.gdop_soglia } }); }
+/* all'apertura: se da 6 ore non li ha rimandati, rimanda i propri dati (il canale li tiene 12 ore) */
+function rimandaPropri() {
+  if (!IMP.condividi || Date.now() - (SYNC.inviato || 0) < 6 * 3600000) return;
+  Object.keys(REG).forEach((k) => {
+    const x = REG[k]; if (!x || x.da && x.da !== DEV || !x.ts) return;
+    const i = k.indexOf("|"), y = Object.assign({}, x); delete y.ts; delete y.da;
+    invia({ k: "r", s: Number(k.slice(0, i)), p: k.slice(i + 1), ts: x.ts, x: y });
+  });
+  Object.values(CTRL).forEach((c) => { if (!c.da || c.da === DEV) inviaCtrl(c); });
+  SYNC.inviato = Date.now(); scrivi(K_SYNC + st.prog, SYNC);
+}
+function avviaCondivisione() { inLinea = null; rimandaPropri(); svuota(); ricevi(); }
+function aggiornaVista() {
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || document.querySelector(".dialogo")) { aggiornaVista.dopo = true; return; }
+  aggiornaVista.dopo = false;
+  if (["sessioni", "dettaglio", "registro"].includes(st.vista)) { const y = $("#main").scrollTop; disegna(); $("#main").scrollTop = y; }
+}
+setInterval(() => { ricevi(); svuota(); if (aggiornaVista.dopo) aggiornaVista(); }, 15000);
+window.addEventListener("online", () => { svuota(); ricevi(); });
+window.addEventListener("offline", () => segnaLinea(false));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { ricevi(); svuota(); schermoAcceso(true); } });
+
+/* ---------------------------------------------------------------- fine sessione e allarme */
+function iniTs(s, r) { return r ? (r.ini_ts || (r.inizio ? tsDa(r.data || s.data, r.inizio) : null)) : null; }
+function partiti(s) { return s.vertici.filter((v) => iniTs(s, REG[s.n + "|" + v.punto])).length; }
+function finiti(s) { return s.vertici.filter((v) => (REG[s.n + "|" + v.punto] || {}).fine).length; }
+/* fine prevista = l'ultimo ricevitore che parte + la durata della sessione */
+function finePrevista(s) {
+  const t = s.vertici.map((v) => iniTs(s, REG[s.n + "|" + v.punto]));
+  if (!t.length || t.some((x) => !x)) return null;
+  return Math.max(...t) + durata() * 60000;
+}
+function contoRovescia(f) {
+  const d = Math.round((f - Date.now()) / 1000);
+  if (d <= 0) return -d < 60 ? "finita adesso" : "finita da " + Math.floor(-d / 60) + " min";
+  const mm = Math.floor(d / 60), ss = d % 60;
+  return "tra " + (mm >= 60 ? Math.floor(mm / 60) + " h " + (mm % 60) + " min" : mm + ":" + String(ss).padStart(2, "0"));
+}
+function rigaFine(s, breve) {
+  const n = s.vertici.length, pa = partiti(s), fi = finiti(s);
+  if (!pa) return "";
+  if (fi === n) return breve ? "" : `<div class="tenue" style="margin-top:8px">Sessione chiusa: tutti i ${n} ricevitori hanno la fine.</div>`;
+  const f = finePrevista(s);
+  if (!f) return `<div class="fineprev"><b>Partiti ${pa} di ${n}</b> <span class="tenue">· la fine si calcola quando parte l'ultimo ricevitore (+ ${durata()} min)</span></div>`;
+  return `<div class="fineprev ${f <= Date.now() ? "scaduta" : ""}" data-f="${f}"><b>Fine sessione alle ${hhmm(f)}</b> · <span class="cd">${contoRovescia(f)}</span>
+    ${breve ? "" : `<div class="tenue">tutti i ${n} ricevitori partiti · ultimo alle ${hhmm(f - durata() * 60000)} + ${durata()} min${fi ? " · " + fi + " gia' chiusi" : ""}</div>`}</div>`;
+}
+function interessa(s) { return !st.oper || st.oper === "*" || s.vertici.some((v) => v.operatore === st.oper); }
+/* avviso a telefono bloccato: messaggio programmato sul canale degli avvisi (app ntfy), lo manda chi fa partire l'ultimo ricevitore */
+function avvisoFine(s) {
+  const f = finePrevista(s);
+  if (!f || f - Date.now() < 30000 || !IMP.condividi) return;
+  metti(CANALE + "-avvisi", "Sessione " + s.n + (s.nome ? " " + s.nome : "") + ": fine alle " + hhmm(f) + ". Ferma i ricevitori e premi Fine ora nell'app.",
+    { "Title": "TERRA: fine sessione " + s.n, "Priority": "5", "Tags": "alarm_clock", "At": String(Math.round(f / 1000)) });
+}
+let audio = null;
+function sbloccaAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {} }
+document.addEventListener("pointerdown", sbloccaAudio, { passive: true });
+function bip(volte, lungo) {
+  if (!IMP.suono || !audio) return;
+  try {
+    const t0 = audio.currentTime;
+    for (let i = 0; i < volte; i++) {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "square"; o.frequency.value = i % 2 ? 1320 : 880;
+      const a = t0 + i * (lungo ? 0.5 : 0.25);
+      g.gain.setValueAtTime(0.0001, a); g.gain.exponentialRampToValueAtTime(0.35, a + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, a + (lungo ? 0.4 : 0.18));
+      o.connect(g).connect(audio.destination); o.start(a); o.stop(a + 0.45);
+    }
+  } catch (e) {}
+}
+function vibra(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+function notifica(titolo, testo, tag) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted" || !navigator.serviceWorker) return;
+    navigator.serviceWorker.ready.then((r) => r.showNotification(titolo, { body: testo, tag, renotify: true, requireInteraction: true, icon: "icona-192.png", badge: "icona-192.png", vibrate: [600, 200, 600, 200, 600] })).catch(() => {});
+  } catch (e) {}
+}
+function chiediPermessi() { sbloccaAudio(); try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {} }
+let suona = null;
+function allarmeFine(s, f) {
+  const mio = st.oper && st.oper !== "*" ? s.vertici.find((v) => v.operatore === st.oper && !(REG[s.n + "|" + v.punto] || {}).fine) : null;
+  notifica("Fine sessione " + s.n, "Alle " + hhmm(f) + ": ferma il ricevitore" + (mio ? " su " + mio.punto : "") + " e premi Fine ora.", "fine" + s.n);
+  vibra([800, 300, 800, 300, 800, 300, 800]);
+  let n = 0; clearInterval(suona); bip(6, true); suona = setInterval(() => { bip(6, true); vibra([800, 300, 800]); if (++n >= 20) clearInterval(suona); }, 3000);
+  document.querySelectorAll(".dialogo.allarme, .dialogo.gdop").forEach((d) => d.remove());
+  const d = document.createElement("div"); d.className = "dialogo allarme";
+  d.innerHTML = `<div class="box"><div class="grande">Fine sessione ${s.n}</div>
+    <p>Sono passati ${durata()} minuti dall'ultimo ricevitore partito (fine alle <b>${hhmm(f)}</b>).<br>Ferma la registrazione${mio ? " su <b>" + esc(mio.punto) + "</b>" : ""} e premi Fine ora.</p>
+    <div class="bottoni"><button class="b2" data-x="chiudi">Chiudi</button>${mio ? `<button class="b" data-x="fine">Apri ${esc(mio.punto)}</button>` : `<button class="b" data-x="apri">Apri la sessione</button>`}</div></div>`;
+  d.addEventListener("click", (e) => {
+    const x = e.target.dataset.x; if (!x) return;
+    clearInterval(suona); d.remove();
+    if (x === "fine") vai("dettaglio", { sess: s.n, punto: mio.punto });
+    else if (x === "apri") vai("dettaglio", { sess: s.n, punto: null });
+    if (aggiornaVista.dopo) aggiornaVista();
+  });
+  document.body.appendChild(d);
+}
+/* schermo acceso mentre ci sono sessioni in corso (altrimenti il telefono dorme e non suona) */
+let wl = null;
+async function schermoAcceso(forza) {
+  const serve = P && IMP.schermo && P.sessioni.some((s) => interessa(s) && partiti(s) && finiti(s) < s.vertici.length);
+  if (serve && (!wl || forza) && "wakeLock" in navigator && document.visibilityState === "visible") {
+    try { const w = await navigator.wakeLock.request("screen"); if (wl) try { wl.release(); } catch (e) {} wl = w; wl.addEventListener("release", () => { if (wl === w) wl = null; }); } catch (e) {}
+  } else if (!serve && wl) { try { wl.release(); } catch (e) {} wl = null; }
+}
+/* controllo dei tempi ogni 2 secondi: conti alla rovescia, fine sessione, controlli GDOP */
+function controllaTempi() {
+  if (!P) return;
+  const now = Date.now();
+  document.querySelectorAll("[data-f]").forEach((el) => {
+    const f = Number(el.dataset.f), c = el.querySelector(".cd");
+    if (c) c.textContent = contoRovescia(f);
+    el.classList.toggle("scaduta", f <= now);
+  });
+  P.sessioni.forEach((s) => {
+    const f = finePrevista(s); if (!f) return;
+    const k = s.n + "|" + f;
+    if (now >= f && now - f < 20 * 60000 && !SUONATI[k] && interessa(s) && finiti(s) < s.vertici.length) {
+      SUONATI[k] = now; scrivi(K_SUON + st.prog, SUONATI); allarmeFine(s, f);
+    }
+  });
+  controlloGdop(now);
+  if (!controllaTempi.n || ++controllaTempi.n % 15 === 0) schermoAcceso();
+  controllaTempi.n = controllaTempi.n || 1;
+}
+setInterval(controllaTempi, 2000);
+
+/* ---------------------------------------------------------------- controlli GDOP a tempo
+   Il telefono non legge il ricevitore: ogni N minuti dall'inizio chiede all'operatore il GDOP letto sul
+   controller (e, se vuole, PDOP e satelliti). I controlli saltati restano nel registro come "non eseguito". */
+const RINVII = {};
+function ctrlId(sn, p, k) { return sn + "|" + p + "|" + k; }
+function controlloGdop(now) {
+  if (!(IMP.gdop_min > 0) || !st.oper || st.oper === "*" || document.querySelector(".dialogo")) return;
+  const N = IMP.gdop_min * 60000;
+  for (const s of P.sessioni) for (const v of s.vertici) {
+    if (v.operatore !== st.oper) continue;
+    const r = REG[s.n + "|" + v.punto], ini = iniTs(s, r);
+    if (!ini || r.fine) continue;
+    const k = Math.floor((now - ini) / N); if (k < 1) continue;
+    const f = finePrevista(s), prev = ini + k * N;
+    if (f && (prev > f - 60000 || now >= f)) continue;   // sessione finita o all'ultimo minuto: niente controlli
+    const id = ctrlId(s.n, v.punto, k);
+    if (CTRL[id] || (RINVII[id] && RINVII[id] > now)) continue;
+    if (now - prev > N) continue;
+    chiediGdop(s.n, v.punto, k, prev);
+    return;
+  }
+}
+window.chiediGdop = (sn, nomeP, k, prev) => {
+  const s = sessione(sn); if (!s) return;
+  const v = s.vertici.find((x) => x.punto === nomeP);
+  const id = k ? ctrlId(sn, nomeP, k) : ctrlId(sn, nomeP, "m" + Date.now());
+  if (k) { bip(3, false); vibra([300, 150, 300]); notifica("Controllo GDOP", "Sessione " + sn + ", " + nomeP + ": leggi il GDOP sul ricevitore.", "gdop"); }
+  const d = document.createElement("div"); d.className = "dialogo gdop";
+  d.innerHTML = `<div class="box"><div class="grande">Controllo GDOP</div>
+    <div class="tenue">Sessione ${sn} · ${esc(nomeP)}${k ? " · controllo n. " + k + " delle " + hhmm(prev) : " · controllo in piu'"}</div>
+    <div class="riga" style="gap:8px;margin-top:6px">
+      <div style="flex:1"><label class="campo">GDOP</label><input type="number" inputmode="decimal" step="0.1" id="g-gdop"></div>
+      <div style="flex:1"><label class="campo">PDOP (se c'e')</label><input type="number" inputmode="decimal" step="0.1" id="g-pdop"></div>
+      <div style="flex:1"><label class="campo">Satelliti</label><input type="number" inputmode="numeric" step="1" id="g-sat"></div></div>
+    <label class="campo">Note</label><input type="text" id="g-nota" placeholder="es. perdita segnale, ostacoli">
+    <div class="bottoni">${k ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
+  d.addEventListener("click", (e) => {
+    const x = e.target.dataset.x; if (!x) return;
+    if (x === "ok") {
+      const num = (q) => { const t = $(q).value.replace(",", ".").trim(); return t === "" ? null : Number(t); };
+      const g = num("#g-gdop");
+      if (g == null || !(g > 0)) { toast("Scrivi il GDOP"); $("#g-gdop").focus(); return; }
+      const t = Date.now();
+      const c = { id, sessione: sn, punto: nomeP, operatore: (st.oper && st.oper !== "*" ? st.oper : v && v.operatore) || "", n: k || null,
+        previsto_ts: k ? prev : null, ts_misura: t, gdop: g, pdop: num("#g-pdop"), satelliti: num("#g-sat"), nota: $("#g-nota").value.trim(),
+        soglia: Number(IMP.gdop_soglia) || null, intervallo: k ? IMP.gdop_min : null, ts: t, da: DEV };
+      CTRL[id] = c; salvaCtrl(); inviaCtrl(c);
+      toast(c.soglia && g > c.soglia ? "GDOP " + String(g).replace(".", ",") + " oltre la soglia " + String(c.soglia).replace(".", ",") : "Controllo salvato");
+      if (c.soglia && g > c.soglia) { bip(4, true); vibra([500, 200, 500]); }
+    } else if (x === "dopo") RINVII[id] = Date.now() + 120000;
+    d.remove();
+    if (st.vista === "dettaglio" || st.vista === "registro") aggiornaVista(); else if (aggiornaVista.dopo) aggiornaVista();
+  });
+  document.body.appendChild(d);
+  setTimeout(() => { const i = $("#g-gdop"); if (i) i.focus(); }, 50);
+};
+/* tutti i controlli, anche quelli previsti e non fatti */
+function righeControlli() {
+  const out = [], visti = new Set(), now = Date.now();
+  const N = IMP.gdop_min > 0 ? IMP.gdop_min * 60000 : 0;
+  Object.values(CTRL).forEach((c) => {
+    visti.add(c.id);
+    const fuori = c.soglia && c.gdop > c.soglia;
+    out.push({ sessione: c.sessione, punto: c.punto, operatore: c.operatore || "", n: c.n || "extra",
+      previsto: c.previsto_ts ? hhmm(c.previsto_ts) : "", eseguito: hhmm(c.ts_misura), ritardo_min: c.previsto_ts ? Math.max(0, Math.round((c.ts_misura - c.previsto_ts) / 60000)) : "",
+      gdop: c.gdop, pdop: c.pdop, satelliti: c.satelliti, soglia: c.soglia, esito: fuori ? "oltre soglia" : "ok", nota: c.nota || "", _t: c.previsto_ts || c.ts_misura });
+  });
+  if (N) P.sessioni.forEach((s) => s.vertici.forEach((v) => {
+    const r = REG[s.n + "|" + v.punto], ini = iniTs(s, r); if (!ini) return;
+    const fp = finePrevista(s), fine = r.fin_ts || (r.fine ? tsDa(r.data || s.data, r.fine) : null);
+    const lim = Math.min(fine || Infinity, fp ? fp - 60000 : Infinity, now);
+    for (let k = 1; ini + k * N <= lim; k++) {
+      const id = ctrlId(s.n, v.punto, k); if (visti.has(id)) continue;
+      if (!fine && now - (ini + k * N) <= N) continue;    // e' il controllo di adesso: c'e' ancora tempo
+      out.push({ sessione: s.n, punto: v.punto, operatore: (r && r.operatore) || v.operatore || "", n: k, previsto: hhmm(ini + k * N), eseguito: "", ritardo_min: "",
+        gdop: null, pdop: null, satelliti: null, soglia: Number(IMP.gdop_soglia) || null, esito: "non eseguito", nota: "", _t: ini + k * N });
+    }
+  }));
+  return out.sort((a, b) => a.sessione - b.sessione || String(a.punto).localeCompare(String(b.punto)) || a._t - b._t);
+}
+
+/* ---------------------------------------------------------------- foto (IndexedDB, restano sul telefono) */
+function fotoDb() {
+  return fotoDb.p || (fotoDb.p = new Promise((ok, ko) => {
+    const r = indexedDB.open("terra_sess_foto", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("foto", { keyPath: "id" });
+    r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error);
+  }));
+}
+async function fotoElenco(filtro) {
+  const d = await fotoDb();
+  return new Promise((ok) => {
+    const out = [], q = d.transaction("foto").objectStore("foto").openCursor();
+    q.onsuccess = () => { const c = q.result; if (!c) { ok(out.sort((a, b) => a.ts - b.ts)); return; } if (c.value.prog === st.prog && (!filtro || filtro(c.value))) out.push(c.value); c.continue(); };
+    q.onerror = () => ok(out);
+  });
+}
+async function fotoScrivi(f, togli) {
+  const d = await fotoDb();
+  return new Promise((ok, ko) => { const t = d.transaction("foto", "readwrite"); togli ? t.objectStore("foto").delete(f) : t.objectStore("foto").put(f); t.oncomplete = () => ok(); t.onerror = () => ko(t.error); });
+}
+async function riduci(file, lato) {
+  let img;
+  try { img = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch (e) { img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(file); }); }
+  const w = img.width, h = img.height, k = Math.min(1, lato / Math.max(w, h));
+  const c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.82));
+}
+async function fotoAggiungi(sn, nomeP, file) {
+  const b = await riduci(file, 1600), t = Date.now();
+  await fotoScrivi({ id: st.prog + "|" + sn + "|" + nomeP + "|" + t, prog: st.prog, sessione: sn, punto: nomeP, ts: t, data: oggi(), ora: hhmm(t), dati: b });
+}
+async function mostraFoto(sn, nomeP) {
+  const el = $("#foto-l"); if (!el) return;
+  let ff = [];
+  try { ff = await fotoElenco((f) => f.sessione === sn && f.punto === nomeP); } catch (e) { el.innerHTML = '<span class="tenue">Foto non disponibili su questo telefono.</span>'; return; }
+  (mostraFoto.url || []).forEach((u) => URL.revokeObjectURL(u));
+  mostraFoto.url = ff.map((f) => URL.createObjectURL(f.dati));
+  el.innerHTML = ff.map((f, i) => `<div><img src="${mostraFoto.url[i]}" alt="" onclick="window.open(this.src)"><button data-id="${esc(f.id)}" aria-label="Elimina">&times;</button><span>${esc(f.ora)}</span></div>`).join("");
+  el.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => chiedi("Elimino questa foto dal telefono?", "Elimina", async () => { await fotoScrivi(b.dataset.id, true); mostraFoto(sn, nomeP); }, true)));
+}
+function inBase64(blob) { return new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => ok(""); r.readAsDataURL(blob); }); }
+
 /* ---------------------------------------------------------------- registro */
 function righeRegistro() {
   const out = [];
-  P.sessioni.forEach((s) => s.vertici.forEach((v) => {
-    const r = REG[s.n + "|" + v.punto]; if (!r || (!r.inizio && !r.fine && r.hant == null && !r.note)) return;
-    out.push({ sessione: s.n, nome_sessione: s.nome || "", data: r.data || s.data || "", punto: v.punto, ricevitore: v.ric, operatore: r.operatore || v.operatore || "",
-      file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", inizio: r.inizio || "", fine: r.fine || "",
-      inizio_previsto: s.inizio, fine_previsto: s.fine, note: r.note || "" });
-  }));
+  P.sessioni.forEach((s) => {
+    const fp = finePrevista(s);
+    s.vertici.forEach((v) => {
+      const r = REG[s.n + "|" + v.punto]; if (!r || (!r.inizio && !r.fine && r.hant == null && !r.note)) return;
+      const cc = Object.values(CTRL).filter((c) => c.sessione === s.n && c.punto === v.punto);
+      const ini = iniTs(s, r), fin = r.fin_ts || (r.fine ? tsDa(r.data || s.data, r.fine) : null);
+      out.push({ sessione: s.n, nome_sessione: s.nome || "", data: r.data || s.data || "", punto: v.punto, ricevitore: v.ric, operatore: r.operatore || v.operatore || "",
+        file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", inizio: r.inizio || "", fine: r.fine || "",
+        durata_min: ini && fin ? Math.round((fin - ini) / 60000) : null, fine_sessione_calcolata: fp ? hhmm(fp) : "",
+        inizio_previsto: s.inizio, fine_previsto: s.fine, controlli_gdop: cc.length, gdop_max: cc.length ? Math.max(...cc.map((c) => c.gdop)) : null, note: r.note || "" });
+    });
+  });
   return out;
 }
 function vRegistro(m) {
-  const rr = righeRegistro();
-  let h = `<div class="scheda"><div class="grande">Registro della campagna</div><div class="tenue">${rr.length} vertici registrati su ${P.sessioni.reduce((a, s) => a + s.vertici.length, 0)}</div>
-    <div class="bottoni"><button class="b" onclick="esporta('json')">Invia registro (TERRA)</button><button class="b2" onclick="esporta('csv')">CSV per Excel</button></div>
-    <div class="tenue" style="margin-top:8px">Il file JSON si importa in TERRA. Se c'e' campo puoi mandarlo subito (WhatsApp, email), altrimenti resta qui e lo mandi dopo.</div></div>`;
+  const rr = righeRegistro(), cc = righeControlli();
+  const nOk = cc.filter((c) => c.esito === "ok").length, nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length;
+  let h = `<div class="scheda"><div class="grande">Registro della campagna</div><div class="tenue">${rr.length} vertici registrati su ${P.sessioni.reduce((a, s) => a + s.vertici.length, 0)} · ${cc.length} controlli GDOP</div>
+    <div class="bottoni"><button class="b" onclick="esporta('html')">Registro completo (con foto)</button></div>
+    <div class="bottoni"><button class="b2" onclick="esporta('json')">JSON (TERRA)</button><button class="b2" onclick="esporta('csv')">CSV per Excel</button></div>
+    <div class="tenue" style="margin-top:8px">Il registro completo si apre su qualsiasi telefono o PC: tabella dei vertici, tabella dei controlli e foto.${IMP.condividi ? " Contiene i dati di tutti i telefoni arrivati dal canale; le foto sono solo quelle di questo telefono." : ""}</div></div>`;
+  h += vImpostazioni();
   if (!rr.length) h += `<div class="vuoto">Ancora nessun vertice registrato.</div>`;
-  else h += `<div class="scheda" style="overflow-x:auto"><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
+  else h += `<div class="scheda" style="overflow-x:auto"><b>Vertici</b><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
     ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:'${esc(x.punto)}'})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
       <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
+  if (cc.length) h += `<div class="scheda" style="overflow-x:auto"><b>Controlli GDOP</b> <span class="tenue">· ${nOk} ok · ${nF} oltre soglia · ${nN} non eseguiti</span>
+    <table><tr><th>S.</th><th>Vertice</th><th>Prev.</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>
+    ${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${c.esito === "ok" ? "" : "fuori"}">${esc(c.esito)}</td></tr>`).join("")}</table></div>`;
   m.innerHTML = h;
+  collegaImpostazioni();
+}
+function vImpostazioni() {
+  const n = (x) => String(x == null ? "" : x).replace(".", ",");
+  return `<div class="scheda"><b>Impostazioni della campagna</b>
+    <div class="interr"><div>Stato condiviso tra i telefoni<div class="tenue">${IMP.condividi ? (inLinea ? "in linea" : "non in linea: i dati partono quando torna internet") + (OUT.length ? " · " + OUT.length + " da inviare" : "") : "spento: i dati restano solo qui"}</div></div><input type="checkbox" id="i-cond" ${IMP.condividi ? "checked" : ""}></div>
+    <div class="interr"><div>Durata della sessione (min)<div class="tenue">fine = ultimo ricevitore partito + durata</div></div><input type="number" inputmode="numeric" id="i-dur" value="${n(IMP.durata)}"></div>
+    <div class="interr"><div>Controllo GDOP ogni (min)<div class="tenue">0 = nessun controllo a tempo</div></div><input type="number" inputmode="numeric" id="i-gmin" value="${n(IMP.gdop_min)}"></div>
+    <div class="interr"><div>Soglia GDOP<div class="tenue">oltre: avviso e "oltre soglia" nel registro</div></div><input type="number" inputmode="decimal" step="0.1" id="i-gsog" value="${n(IMP.gdop_soglia)}"></div>
+    <div class="interr"><div>Suono degli allarmi</div><input type="checkbox" id="i-suono" ${IMP.suono ? "checked" : ""}></div>
+    <div class="interr"><div>Schermo acceso durante le sessioni<div class="tenue">a schermo spento l'app non puo' suonare</div></div><input type="checkbox" id="i-schermo" ${IMP.schermo ? "checked" : ""}></div>
+    <div class="bottoni"><button class="b2" id="i-prova">Prova allarme</button></div>
+    <div class="tenue" style="margin-top:8px">Durata e controlli GDOP valgono per tutti: cambiati qui, arrivano agli altri telefoni.${IMP.condividi ? `<br>Allarme anche a telefono bloccato: installa l'app <b>ntfy</b> e iscriviti all'argomento <b style="word-break:break-all">${esc(CANALE)}-avvisi</b> <a class="link" href="#" id="i-copia">copia</a>` : ""}</div></div>`;
+}
+function collegaImpostazioni() {
+  const num = (id, d) => { const t = $(id).value.replace(",", ".").trim(); const x = Number(t); return t === "" || !isFinite(x) ? d : x; };
+  const comuni = () => { IMP.ts = Date.now(); salvaImp(); inviaImp(); disegna(); };
+  $("#i-cond").addEventListener("change", (e) => { IMP.condividi = e.target.checked; salvaImp(); if (IMP.condividi) avviaCondivisione(); testata(); disegna(); });
+  $("#i-dur").addEventListener("change", () => { IMP.durata = Math.max(1, Math.round(num("#i-dur", IMP.durata))); comuni(); });
+  $("#i-gmin").addEventListener("change", () => { IMP.gdop_min = Math.max(0, Math.round(num("#i-gmin", 0))); comuni(); });
+  $("#i-gsog").addEventListener("change", () => { IMP.gdop_soglia = Math.max(0, num("#i-gsog", IMP.gdop_soglia)); comuni(); });
+  $("#i-suono").addEventListener("change", (e) => { IMP.suono = e.target.checked; salvaImp(); });
+  $("#i-schermo").addEventListener("change", (e) => { IMP.schermo = e.target.checked; salvaImp(); schermoAcceso(); });
+  $("#i-prova").addEventListener("click", () => { chiediPermessi(); sbloccaAudio(); bip(6, true); vibra([800, 300, 800]); notifica("TERRA Sessioni", "Prova dell'allarme di fine sessione", "prova"); });
+  const cp = $("#i-copia");
+  if (cp) cp.addEventListener("click", (e) => { e.preventDefault(); try { navigator.clipboard.writeText(CANALE + "-avvisi").then(() => toast("Copiato")); } catch (x) { toast(CANALE + "-avvisi"); } });
+}
+function csv(colonne, righe) {
+  const q = (v) => { v = v == null ? "" : typeof v === "number" ? String(v).replace(".", ",") : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return colonne.join(";") + "\r\n" + righe.map((x) => colonne.map((k) => q(x[k])).join(";")).join("\r\n") + "\r\n";
+}
+const COL_REG = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "inizio", "fine", "durata_min", "fine_sessione_calcolata", "inizio_previsto", "fine_previsto", "controlli_gdop", "gdop_max", "note"];
+const COL_CTRL = ["sessione", "punto", "operatore", "n", "previsto", "eseguito", "ritardo_min", "gdop", "pdop", "satelliti", "soglia", "esito", "nota"];
+async function registroHtml(rr, cc, ff, chi) {
+  const n3 = (x) => x == null ? "" : Number(x).toFixed(3).replace(".", ",");
+  const n1 = (x) => x == null ? "" : String(x).replace(".", ",");
+  let foto = "";
+  for (const f of ff) foto += `<figure><img src="data:image/jpeg;base64,${await inBase64(f.dati)}" alt=""><figcaption>Sessione ${f.sessione} · ${esc(f.punto)} · ${esc(f.data || "")} ${esc(f.ora)}</figcaption></figure>`;
+  const nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length;
+  return `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Registro ${esc(P.progetto || "")}</title>
+<style>body{font:14px/1.4 Arial,sans-serif;color:#1D262B;margin:20px}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;border-bottom:2px solid #2F6B4F;padding-bottom:3px}
+.t{color:#6B7780}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border:1px solid #D7DBD4;padding:4px 6px;text-align:left;vertical-align:top}th{background:#EEF2EC}
+.f{color:#D2382F;font-weight:700}.n{color:#8A6400;font-weight:700}figure{display:inline-block;margin:0 10px 12px 0;width:300px;vertical-align:top}figure img{width:100%;border-radius:6px}figcaption{font-size:12px;color:#6B7780}
+@media print{figure{width:45%}h2{break-after:avoid}}</style></head><body>
+<h1>Registro della campagna GNSS - ${esc(P.progetto || "")}</h1>
+<div class="t">Sistema ${esc(P.sistema || "-")} · sessioni da TERRA del ${esc(P.creato || "")} · registro di ${esc(chi)} · esportato ${oggi()} ${ora()} · TERRA Sessioni ${VERSIONE}</div>
+<div class="t">Durata sessione ${durata()} min · controllo GDOP ${IMP.gdop_min > 0 ? "ogni " + IMP.gdop_min + " min, soglia " + n1(IMP.gdop_soglia) : "non a tempo"}</div>
+<h2>Vertici (${rr.length})</h2>
+<table><tr><th>Sess.</th><th>Data</th><th>Vertice</th><th>Ric.</th><th>Operatore</th><th>File</th><th>H ant. (m)</th><th>Tipo</th><th>Inizio</th><th>Fine</th><th>Durata (min)</th><th>Fine calcolata</th><th>Controlli</th><th>GDOP max</th><th>Note</th></tr>
+${rr.map((x) => `<tr><td>${x.sessione}</td><td>${esc(x.data)}</td><td><b>${esc(x.punto)}</b></td><td>${x.ricevitore}</td><td>${esc(x.operatore)}</td><td>${esc(x.file)}</td><td>${x.h_antenna != null ? n3(x.h_antenna) : '<span class="f">manca</span>'}</td><td>${esc(x.tipo_altezza)}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td>${x.durata_min != null ? x.durata_min : ""}</td><td>${esc(x.fine_sessione_calcolata)}</td><td>${x.controlli_gdop}</td><td>${n1(x.gdop_max)}</td><td>${esc(x.note)}</td></tr>`).join("")}</table>
+<h2>Controlli (${cc.length}${nF ? ", " + nF + " oltre soglia" : ""}${nN ? ", " + nN + " non eseguiti" : ""})</h2>
+${cc.length ? `<table><tr><th>Sess.</th><th>Vertice</th><th>Operatore</th><th>N.</th><th>Previsto</th><th>Eseguito</th><th>Ritardo (min)</th><th>GDOP</th><th>PDOP</th><th>Satelliti</th><th>Soglia</th><th>Esito</th><th>Note</th></tr>
+${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.operatore)}</td><td>${esc(c.n)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.ritardo_min}</td><td>${n1(c.gdop)}</td><td>${n1(c.pdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td>${n1(c.soglia)}</td><td class="${c.esito === "oltre soglia" ? "f" : c.esito === "non eseguito" ? "n" : ""}">${esc(c.esito)}</td><td>${esc(c.nota)}</td></tr>`).join("")}</table>` : '<p class="t">Nessun controllo.</p>'}
+<h2>Foto (${ff.length})</h2>${foto || '<p class="t">Nessuna foto su questo telefono.</p>'}
+</body></html>`;
 }
 window.esporta = async (tipo) => {
-  const rr = righeRegistro();
-  if (!rr.length) { toast("Il registro e' vuoto"); return; }
+  const rr = righeRegistro(), cc = righeControlli();
+  if (!rr.length && !cc.length) { toast("Il registro e' vuoto"); return; }
   const chi = st.oper && st.oper !== "*" ? st.oper : "tutti";
   const base = (P.progetto || "rete").replace(/[^\w\-]+/g, "_") + "_registro_" + chi.replace(/[^\w\-]+/g, "_") + "_" + oggi().replace(/\//g, "");
+  let ff = [];
+  try { ff = await fotoElenco(); } catch (e) {}
   let testo, nome, mime;
+  toast("Preparo il registro...");
+  const ctrl = cc.map((c) => { const y = Object.assign({}, c); delete y._t; return y; });
   if (tipo === "json") {
-    testo = JSON.stringify({ terra: "registro-campagna", versione: 1, progetto: P.progetto, creato: P.creato, operatore: chi, esportato: oggi() + " " + ora(), app: VERSIONE, righe: rr }, null, 1);
+    const foto = [];
+    for (const f of ff) foto.push({ sessione: f.sessione, punto: f.punto, data: f.data, ora: f.ora, jpeg_base64: await inBase64(f.dati) });
+    testo = JSON.stringify({ terra: "registro-campagna", versione: 2, progetto: P.progetto, creato: P.creato, operatore: chi, esportato: oggi() + " " + ora(), app: VERSIONE,
+      impostazioni: { durata_min: durata(), gdop_ogni_min: IMP.gdop_min, gdop_soglia: IMP.gdop_soglia }, righe: rr, controlli: ctrl, foto }, null, 1);
     nome = base + ".json"; mime = "application/json";
-  } else {
-    const c = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "inizio", "fine", "inizio_previsto", "fine_previsto", "note"];
-    const q = (v) => { v = v == null ? "" : typeof v === "number" ? String(v).replace(".", ",") : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    testo = "﻿" + c.join(";") + "\r\n" + rr.map((x) => c.map((k) => q(x[k])).join(";")).join("\r\n") + "\r\n";
+  } else if (tipo === "csv") {
+    testo = "﻿" + csv(COL_REG, rr) + "\r\nCONTROLLI GDOP\r\n" + csv(COL_CTRL, ctrl);
     nome = base + ".csv"; mime = "text/csv";
+  } else {
+    testo = await registroHtml(rr, ctrl, ff, chi);
+    nome = base + ".html"; mime = "text/html";
   }
   const file = new File([testo], nome, { type: mime });
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome }); return; }
-  } catch (e) { if (e && e.name === "AbortError") return; }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    if (e && e.name === "NotAllowedError") {   // preparazione lunga (foto): il telefono vuole un altro tocco
+      chiedi(`Registro pronto: <b>${esc(nome)}</b>`, "Condividi", () => navigator.share({ files: [file], title: nome }).catch(() => {}));
+      return;
+    }
+  }
   const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = nome; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   toast("Salvato: " + nome);
