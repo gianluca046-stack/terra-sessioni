@@ -117,7 +117,7 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.1";
+const VERSIONE = "2.2";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
@@ -159,7 +159,10 @@ function tsDa(data, hhmm) {
 }
 function hhmm(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
 
-function salvaStato() { scrivi(K_STATO, { prog: st.prog, vista: st.vista, oper: st.oper, sess: st.sess, punto: st.punto }); }
+function salvaStato() { scrivi(K_STATO, { prog: st.prog, vista: st.vista, oper: st.oper, capo: !!st.capo, sess: st.sess, punto: st.punto }); }
+/* operatore con un ricevitore (anche capo squadra) o "Tutti" */
+function io() { return st.oper && st.oper !== "*" ? st.oper : ""; }
+function vedoTutto() { return !io() || !!st.capo; }
 function apriProgetto(id) {
   const x = progetti.find((p) => p.id === id);
   P = x ? x.dati : null; st.prog = x ? id : null;
@@ -182,7 +185,7 @@ function sessione(n) { return (P.sessioni || []).find((s) => s.n === n); }
 function nomeSess(s) { return "Sessione " + s.n + (s.nome ? " - " + s.nome : ""); }
 function miei(s) { return st.oper && st.oper !== "*" ? s.vertici.filter((v) => v.operatore === st.oper) : s.vertici; }
 function statoSess(s) {
-  const vv = miei(s); if (!vv.length) return "dafare";
+  const vv = vedoTutto() ? s.vertici : miei(s); if (!vv.length) return "dafare";
   const r = vv.map((v) => REG[s.n + "|" + v.punto] || {});
   if (r.every((x) => x.fine)) return "fatta";
   if (r.some((x) => x.inizio)) return "corso";
@@ -251,7 +254,7 @@ function disegna() {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("att", b.dataset.v === st.vista || (st.vista === "dettaglio" && b.dataset.v === "sessioni")));
   $("#h-tit").textContent = P ? P.progetto || "Rete GNSS" : "TERRA Sessioni";
   testata();
-  const ho = $("#h-oper"); ho.hidden = !P || !(P.operatori || []).length; ho.textContent = st.oper && st.oper !== "*" ? st.oper : "Tutti";
+  const ho = $("#h-oper"); ho.hidden = !P || !(P.operatori || []).length; ho.textContent = io() ? io() + (st.capo ? " · capo" : "") : "Tutti";
   if (st.vista !== "schema" && st.vista !== "dettaglio") fermaGps();
   ({ progetti: vProgetti, operatore: vOperatore, sessioni: vSessioni, dettaglio: vDettaglio, schema: vSchema, registro: vRegistro }[st.vista] || vSessioni)(m);
 }
@@ -296,14 +299,17 @@ function vOperatore(m) {
     h += `<button class="b2" style="width:100%;text-align:left;margin-bottom:8px;${st.oper === o ? "border-color:var(--verde);border-width:2px" : ""}" onclick="scegliOper(${i})">
       <b>${esc(o)}</b> <span class="tenue">· ricevitore ${i + 1} · ${n} sessioni</span></button>`;
   });
-  h += `<button class="b2" style="width:100%;text-align:left" onclick="scegliOper(-1)"><b>Tutti</b> <span class="tenue">· vedo tutti i vertici (capo squadra)</span></button>`;
+  h += `<button class="b2" style="width:100%;text-align:left" onclick="scegliOper(-1)"><b>Tutti</b> <span class="tenue">· vedo tutti i vertici, senza un ricevitore mio</span></button>
+    <div class="scheda" style="margin-top:14px"><div class="interr" style="border:0"><div><b>Sono anche capo squadra</b><div class="tenue">con il mio ricevitore: vedo e compilo tutte le sessioni e i vertici dei colleghi, ricevo tutti gli allarmi di fine sessione; i controlli GDOP a tempo li chiede solo per i miei vertici</div></div>
+    <input type="checkbox" id="o-capo" ${st.capo ? "checked" : ""}></div></div>`;
   m.innerHTML = h;
+  $("#o-capo").addEventListener("change", (e) => { st.capo = e.target.checked; salvaStato(); testata(); });
 }
 window.scegliOper = (i) => { st.oper = i < 0 ? "*" : P.operatori[i]; vai("sessioni", { sess: null }); };
 
 function vSessioni(m) {
   const filtro = st.filtro || "tutte";
-  const lista = P.sessioni.filter((s) => (st.oper && st.oper !== "*" ? miei(s).length : true) && (filtro === "tutte" || statoSess(s) === filtro));
+  const lista = P.sessioni.filter((s) => (vedoTutto() ? true : miei(s).length) && (filtro === "tutte" || statoSess(s) === filtro));
   let h = `<div class="filtri">${["tutte", "dafare", "corso", "fatta"].map((f) => `<button class="${f === filtro ? "att" : ""}" onclick="filtra('${f}')">${f === "tutte" ? "Tutte" : NOMI_STATO[f]}</button>`).join("")}</div>`;
   let giorno = null;
   if (!lista.length) h += `<div class="vuoto">Nessuna sessione${filtro !== "tutte" ? " " + NOMI_STATO[filtro] : ""}${st.oper && st.oper !== "*" ? " per " + esc(st.oper) : ""}.</div>`;
@@ -367,46 +373,57 @@ function vDettaglio(m) {
     <div class="tenue" style="margin-top:6px">Tutto viene salvato subito sul telefono${IMP.condividi ? " e mandato agli altri quando c'e' internet" : ""}.</div></div>`;
   // controlli GDOP del vertice
   const cc = righeControlli().filter((c) => c.sessione === s.n && c.punto === v.punto);
-  h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Controlli GDOP</b><div class="tenue">${IMP.gdop_min > 0 ? "ogni " + IMP.gdop_min + " min, soglia " + String(IMP.gdop_soglia).replace(".", ",") : "a tempo non attivi (Registro &gt; Impostazioni)"}</div></div>
+  const sa = slotAttuale(s, v, Date.now());
+  const n1 = (x) => x == null ? "" : String(x).replace(".", ",");
+  h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Controlli GDOP</b><div class="tenue">${IMP.gdop_min > 0 ? "ogni " + IMP.gdop_min + " min, soglia " + n1(IMP.gdop_soglia) : "a tempo non attivi (Registro &gt; Impostazioni)"}</div></div>
     <button class="b2" onclick="chiediGdop(${s.n},'${esc(v.punto)}',0,Date.now())">Controllo ora</button></div>
-    ${cc.length ? `<table style="margin-top:6px"><tr><th>Previsto</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>${cc.map((c) => `<tr><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${c.esito === "ok" ? "" : "fuori"}">${esc(c.esito)}</td></tr>`).join("")}</table>` : `<div class="tenue" style="margin-top:6px">Nessun controllo.</div>`}</div>`;
+    ${sa ? `<div class="avviso" style="margin:8px 0 0">Controllo n. ${sa.k} delle ${hhmm(sa.prev)} da fare${v.operatore !== st.oper ? " (" + esc(v.operatore) + ")" : ""} <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="chiediGdop(${s.n},'${esc(v.punto)}',${sa.k},${sa.prev})">Inserisci</button></div>` : ""}
+    ${r.senza_ctrl ? `<div class="avviso" style="margin:8px 0 0">Controller non disponibile dalle ${hhmm(r.senza_ctrl.da)} (${esc(r.senza_ctrl.motivo || "")}) <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="senzaController(${s.n},'${esc(v.punto)}',false)">Di nuovo disponibile</button></div>`
+      : `<div class="bottoni"><button class="b2" onclick="senzaController(${s.n},'${esc(v.punto)}',true)">Controller non disponibile</button></div>`}
+    ${cc.length ? `<table style="margin-top:6px"><tr><th>Previsto</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>${cc.map((c) => `<tr ${c.esito === "non eseguito" ? `onclick="chiediGdop(${s.n},'${esc(v.punto)}',${c.n},${c._t})" style="cursor:pointer"` : ""}><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}${c.inserito_da && c.inserito_da !== c.operatore ? '<div class="tenue">da ' + esc(c.inserito_da) + "</div>" : ""}</td><td>${n1(c.gdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${classeEsito(c.esito)}">${esc(c.esito)}${c.esito === "non eseguito" ? ' <span class="tenue">(tocca per inserirlo)</span>' : c.motivo ? '<div class="tenue">' + esc(c.motivo) + "</div>" : ""}</td></tr>`).join("")}</table>` : `<div class="tenue" style="margin-top:6px">Nessun controllo.</div>`}</div>`;
   // foto
   h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Foto</b><div class="tenue">del vertice o del centramento (restano sul telefono e vanno nel registro)</div></div>
     <button class="b2" id="b-foto">Aggiungi foto</button></div><div class="foto" id="foto-l"></div>
     <input type="file" id="file-foto" accept="image/*" capture="environment" hidden></div>`;
   m.innerHTML = h;
-  const salva = () => {
+  /* si salva solo il campo che l'utente ha cambiato: un modulo rimasto indietro (dati arrivati da un altro
+     telefono mentre si scriveva) non deve riscrivere gli altri campi */
+  const salva = (campo, p0) => {
     const x = reg(s.n, v.punto);
-    const hv = $("#hant").value.replace(",", ".").trim();
-    x.hant = hv === "" ? null : Number(hv);
-    const ini = $("#ini").value || "", fin = $("#fin").value || "";
-    x.data = x.data || (ini ? oggi() : "");
-    if (ini !== (x.inizio || "")) x.ini_ts = ini ? tsDa(x.data || s.data, ini) : null;
-    if (fin !== (x.fine || "")) { x.fin_ts = fin ? tsDa(x.data || s.data, fin) : null; if (x.fin_ts && x.ini_ts && x.fin_ts < x.ini_ts) x.fin_ts += 86400000; }
-    x.inizio = ini; x.fine = fin; x.note = $("#note").value;
-    x.operatore = x.operatore || (st.oper && st.oper !== "*" ? st.oper : v.operatore);
-    registrato(s, v.punto);
+    if (!p0 || !p0.__snap) p0 = snap(x);
+    if (campo === "hant") { const hv = $("#hant").value.replace(",", ".").trim(); x.hant = hv === "" ? null : Number(hv); }
+    if (campo === "ini") {
+      const ini = $("#ini").value || "";
+      if (ini !== (x.inizio || "")) { x.data = x.data || (ini ? oggi() : ""); x.ini_ts = ini ? tsDa(x.data || s.data, ini) : null; x.inizio = ini; }
+    }
+    if (campo === "fin") {
+      const fin = $("#fin").value || "";
+      if (fin !== (x.fine || "")) { x.fin_ts = fin ? tsDa(x.data || s.data, fin) : null; if (x.fin_ts && x.ini_ts && x.fin_ts < x.ini_ts) x.fin_ts += 86400000; x.fine = fin; }
+    }
+    if (campo === "note") x.note = $("#note").value;
+    if (!x.operatore) x.operatore = v.operatore;
+    registrato(s, v.punto, p0);
   };
-  ["hant", "ini", "fin", "note"].forEach((id) => $("#" + id).addEventListener("change", salva));
-  $("#note").addEventListener("input", () => { clearTimeout(salva._t); salva._t = setTimeout(salva, 1200); });
+  ["hant", "ini", "fin", "note"].forEach((id) => $("#" + id).addEventListener("change", () => salva(id)));
+  $("#note").addEventListener("input", () => { clearTimeout(salva._t); salva._t = setTimeout(() => salva("note"), 1200); });
   document.querySelectorAll("#tipoh button").forEach((b) => b.addEventListener("click", () => {
-    reg(s.n, v.punto).tipoh = b.dataset.t; registrato(s, v.punto);
+    const x = reg(s.n, v.punto), p0 = snap(x); x.tipoh = b.dataset.t; registrato(s, v.punto, p0);
     document.querySelectorAll("#tipoh button").forEach((c) => c.classList.toggle("att", c === b));
   }));
   $("#b-ini").addEventListener("click", () => {
-    const x = reg(s.n, v.punto), t = Date.now();
+    const x = reg(s.n, v.punto), t = Date.now(), p0 = snap(x);
     x.data = oggi(); x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio;
     chiediPermessi();
-    salva(); toast("Inizio " + x.inizio);
+    salva("", p0); toast("Inizio " + x.inizio);
     avvisoFine(s);
     disegna();
   });
   $("#b-fin").addEventListener("click", () => {
     if (!$("#hant").value) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
-    const x = reg(s.n, v.punto), t = Date.now();
+    const x = reg(s.n, v.punto), t = Date.now(), p0 = snap(x);
     if (!$("#ini").value) { x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio; x.data = x.data || oggi(); }
     x.fin_ts = t; x.fine = hhmm(t); $("#fin").value = x.fine;
-    salva(); toast("Fine " + x.fine + ": vertice registrato"); disegna();
+    salva(x.hant == null ? "hant" : "", p0); toast("Fine " + x.fine + ": vertice registrato"); disegna();
   });
   $("#b-foto").addEventListener("click", () => $("#file-foto").click());
   $("#file-foto").addEventListener("change", async (e) => {
@@ -611,10 +628,18 @@ async function ricevi() {
 }
 function applica(m) {
   if (m.k === "r" && m.s != null && m.p) {
-    const k = m.s + "|" + m.p, cur = REG[k];
-    if (cur && (cur.ts || 0) >= (m.ts || 0)) return false;
-    REG[k] = Object.assign({}, m.x || {}, { ts: m.ts || 0, da: m.d });
-    return true;
+    const k = m.s + "|" + m.p, cur = REG[k] || {}, rx = m.x || {}, rt = rx.t || null;
+    let cambia = false;
+    const conT = !!cur.t;                            // vertice gia' con le ore per gruppo
+    cur.t = cur.t || {};
+    for (const g in GRUPPI) {
+      const tr = rt ? rt[g] : (m.ts || 0);          // versioni 2.0-2.1: tutto il vertice con la stessa ora
+      if (!tr) continue;
+      const tl = conT ? (cur.t[g] || 0) : (cur.ts || 0);
+      if (tr > tl) { GRUPPI[g].forEach((f) => { if (rx[f] === undefined) delete cur[f]; else cur[f] = rx[f]; }); cur.t[g] = tr; cambia = true; }
+    }
+    if (cambia) { cur.ts = Math.max(cur.ts || 0, m.ts || 0); REG[k] = cur; }
+    return cambia;
   }
   if (m.k === "c" && m.x && m.x.id) {
     const cur = CTRL[m.x.id];
@@ -630,26 +655,40 @@ function applica(m) {
   }
   return false;
 }
-/* un vertice cambiato su questo telefono: si salva e si manda agli altri */
-function registrato(s, nomeP) {
-  const x = reg(s.n, nomeP);
-  x.ts = Date.now(); x.da = DEV;
-  salvaReg();
-  const y = Object.assign({}, x); delete y.ts; delete y.da;
+/* gruppi di campi di un vertice: ognuno con la sua ora di modifica, cosi' due telefoni che cambiano campi
+   diversi dello stesso vertice (anche senza rete) non si cancellano a vicenda */
+const GRUPPI = { ini: ["inizio", "ini_ts", "data"], fin: ["fine", "fin_ts"], hant: ["hant"], tipoh: ["tipoh"], note: ["note"], op: ["operatore"], sc: ["senza_ctrl"] };
+function snap(x) { const o = { __snap: 1 }; for (const g in GRUPPI) o[g] = JSON.stringify(GRUPPI[g].map((f) => x[f] == null ? null : x[f])); return o; }
+function msgVertice(sn, nomeP, x) {
+  const y = { t: Object.assign({}, x.t || {}) };
+  for (const g in GRUPPI) GRUPPI[g].forEach((f) => { if (x[f] !== undefined) y[f] = x[f]; });
   if (y.note && y.note.length > 1500) y.note = y.note.slice(0, 1500);
-  invia({ k: "r", s: s.n, p: nomeP, ts: x.ts, x: y });
+  return { k: "r", s: sn, p: nomeP, ts: x.ts || Date.now(), x: y };
+}
+/* un vertice cambiato su questo telefono: si segnano i gruppi cambiati, si salva e si manda agli altri */
+function registrato(s, nomeP, p0) {
+  const x = reg(s.n, nomeP), now = Date.now(), p1 = snap(x);
+  x.t = x.t || {};
+  let n = 0;
+  for (const g in GRUPPI) if (!p0 || p0[g] !== p1[g]) { x.t[g] = now; n++; }
+  if (!n) return;
+  x.ts = now; x.da = DEV;
+  salvaReg();
+  invia(msgVertice(s.n, nomeP, x));
 }
 function inviaCtrl(c) { invia({ k: "c", ts: c.ts, x: Object.assign({}, c, { da: undefined }) }); }
 function inviaImp() { invia({ k: "i", ts: IMP.ts, x: { durata: IMP.durata, gdop_min: IMP.gdop_min, gdop_soglia: IMP.gdop_soglia } }); }
 /* all'apertura: se da 6 ore non li ha rimandati, rimanda i propri dati (il canale li tiene 12 ore) */
 function rimandaPropri() {
   if (!IMP.condividi || Date.now() - (SYNC.inviato || 0) < 6 * 3600000) return;
+  // tutto quello che c'e' sul telefono, con le ore di modifica originali: chi ha dati piu' recenti li tiene
   Object.keys(REG).forEach((k) => {
-    const x = REG[k]; if (!x || x.da && x.da !== DEV || !x.ts) return;
-    const i = k.indexOf("|"), y = Object.assign({}, x); delete y.ts; delete y.da;
-    invia({ k: "r", s: Number(k.slice(0, i)), p: k.slice(i + 1), ts: x.ts, x: y });
+    const x = REG[k]; if (!x || !x.ts) return;
+    if (!x.t) { x.t = {}; for (const g in GRUPPI) x.t[g] = x.ts; }
+    const i = k.indexOf("|");
+    invia(msgVertice(Number(k.slice(0, i)), k.slice(i + 1), x));
   });
-  Object.values(CTRL).forEach((c) => { if (!c.da || c.da === DEV) inviaCtrl(c); });
+  Object.values(CTRL).forEach((c) => inviaCtrl(c));
   SYNC.inviato = Date.now(); scrivi(K_SYNC + st.prog, SYNC);
 }
 function avviaCondivisione() { inLinea = null; rimandaPropri(); svuota(); ricevi(); }
@@ -689,7 +728,7 @@ function rigaFine(s, breve) {
   return `<div class="fineprev ${f <= Date.now() ? "scaduta" : ""}" data-f="${f}"><b>Fine sessione alle ${hhmm(f)}</b> · <span class="cd">${contoRovescia(f)}</span>
     ${breve ? "" : `<div class="tenue">tutti i ${n} ricevitori partiti · ultimo alle ${hhmm(f - durata() * 60000)} + ${durata()} min${fi ? " · " + fi + " gia' chiusi" : ""}</div>`}</div>`;
 }
-function interessa(s) { return !st.oper || st.oper === "*" || s.vertici.some((v) => v.operatore === st.oper); }
+function interessa(s) { return vedoTutto() || s.vertici.some((v) => v.operatore === st.oper); }
 /* avviso a telefono bloccato: messaggio programmato sul canale degli avvisi (app ntfy), lo manda chi fa partire l'ultimo ricevitore */
 function avvisoFine(s) {
   const f = finePrevista(s);
@@ -775,21 +814,28 @@ setInterval(controllaTempi, 2000);
    Il telefono non legge il ricevitore: ogni N minuti dall'inizio chiede all'operatore il GDOP letto sul
    controller (e, se vuole, PDOP e satelliti). I controlli saltati restano nel registro come "non eseguito". */
 const RINVII = {};
+const MOTIVI = ["controller spento o scarico", "controller non disponibile", "senza collegamento al ricevitore", "altro"];
 function ctrlId(sn, p, k) { return sn + "|" + p + "|" + k; }
+/* controllo previsto adesso su un vertice: {k, prev} oppure null */
+function slotAttuale(s, v, now) {
+  if (!(IMP.gdop_min > 0)) return null;
+  const N = IMP.gdop_min * 60000, r = REG[s.n + "|" + v.punto], ini = iniTs(s, r);
+  if (!ini || r.fine) return null;
+  const k = Math.floor((now - ini) / N); if (k < 1) return null;
+  const f = finePrevista(s), prev = ini + k * N;
+  if (f && (prev > f - 60000 || now >= f)) return null;      // sessione finita o all'ultimo minuto: niente controlli
+  if (now - prev > N || CTRL[ctrlId(s.n, v.punto, k)]) return null;
+  if (r.senza_ctrl && prev >= (r.senza_ctrl.da || 0)) return null;    // controller non disponibile
+  return { k, prev };
+}
 function controlloGdop(now) {
-  if (!(IMP.gdop_min > 0) || !st.oper || st.oper === "*" || document.querySelector(".dialogo")) return;
-  const N = IMP.gdop_min * 60000;
+  if (!io() || document.querySelector(".dialogo")) return;
   for (const s of P.sessioni) for (const v of s.vertici) {
-    if (v.operatore !== st.oper) continue;
-    const r = REG[s.n + "|" + v.punto], ini = iniTs(s, r);
-    if (!ini || r.fine) continue;
-    const k = Math.floor((now - ini) / N); if (k < 1) continue;
-    const f = finePrevista(s), prev = ini + k * N;
-    if (f && (prev > f - 60000 || now >= f)) continue;   // sessione finita o all'ultimo minuto: niente controlli
-    const id = ctrlId(s.n, v.punto, k);
-    if (CTRL[id] || (RINVII[id] && RINVII[id] > now)) continue;
-    if (now - prev > N) continue;
-    chiediGdop(s.n, v.punto, k, prev);
+    if (v.operatore !== st.oper) continue;            // a tempo solo per i vertici miei
+    const x = slotAttuale(s, v, now); if (!x) continue;
+    const id = ctrlId(s.n, v.punto, x.k);
+    if (RINVII[id] && RINVII[id] > now) continue;
+    chiediGdop(s.n, v.punto, x.k, x.prev);
     return;
   }
 }
@@ -797,29 +843,42 @@ window.chiediGdop = (sn, nomeP, k, prev) => {
   const s = sessione(sn); if (!s) return;
   const v = s.vertici.find((x) => x.punto === nomeP);
   const id = k ? ctrlId(sn, nomeP, k) : ctrlId(sn, nomeP, "m" + Date.now());
-  if (k) { bip(3, false); vibra([300, 150, 300]); notifica("Controllo GDOP", "Sessione " + sn + ", " + nomeP + ": leggi il GDOP sul ricevitore.", "gdop"); }
+  const mioV = v && v.operatore === st.oper;
+  const auto = k && mioV && Date.now() - prev < 90000;
+  if (auto) { bip(3, false); vibra([300, 150, 300]); notifica("Controllo GDOP", "Sessione " + sn + ", " + nomeP + ": leggi il GDOP sul ricevitore.", "gdop"); }
   const d = document.createElement("div"); d.className = "dialogo gdop";
   d.innerHTML = `<div class="box"><div class="grande">Controllo GDOP</div>
-    <div class="tenue">Sessione ${sn} · ${esc(nomeP)}${k ? " · controllo n. " + k + " delle " + hhmm(prev) : " · controllo in piu'"}</div>
-    <div class="riga" style="gap:8px;margin-top:6px">
+    <div class="tenue">Sessione ${sn} · ${esc(nomeP)}${v && !mioV ? " (" + esc(v.operatore) + ")" : ""}${k ? " · controllo n. " + k + " delle " + hhmm(prev) : " · controllo in piu'"}</div>
+    <div class="interr" style="border:0;padding-bottom:0"><div>Controller non disponibile</div><input type="checkbox" id="g-senza"></div>
+    <div id="g-con"><div class="riga" style="gap:8px">
       <div style="flex:1"><label class="campo">GDOP</label><input type="number" inputmode="decimal" step="0.1" id="g-gdop"></div>
       <div style="flex:1"><label class="campo">PDOP (se c'e')</label><input type="number" inputmode="decimal" step="0.1" id="g-pdop"></div>
-      <div style="flex:1"><label class="campo">Satelliti</label><input type="number" inputmode="numeric" step="1" id="g-sat"></div></div>
+      <div style="flex:1"><label class="campo">Satelliti</label><input type="number" inputmode="numeric" step="1" id="g-sat"></div></div></div>
+    <div id="g-no" hidden><label class="campo">Motivo</label><select id="g-mot">${MOTIVI.map((m) => `<option>${esc(m)}</option>`).join("")}</select>
+      <div class="interr" style="border:0"><div>Anche per i prossimi controlli di questo vertice<div class="tenue">non li chiede piu' e nel registro risultano "non verificabile"</div></div><input type="checkbox" id="g-tutti"></div></div>
     <label class="campo">Note</label><input type="text" id="g-nota" placeholder="es. perdita segnale, ostacoli">
-    <div class="bottoni">${k ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
+    <div class="bottoni">${auto ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
+  d.querySelector("#g-senza").addEventListener("change", (e) => { d.querySelector("#g-con").hidden = e.target.checked; d.querySelector("#g-no").hidden = !e.target.checked; });
   d.addEventListener("click", (e) => {
     const x = e.target.dataset.x; if (!x) return;
     if (x === "ok") {
       const num = (q) => { const t = $(q).value.replace(",", ".").trim(); return t === "" ? null : Number(t); };
-      const g = num("#g-gdop");
-      if (g == null || !(g > 0)) { toast("Scrivi il GDOP"); $("#g-gdop").focus(); return; }
+      const senza = $("#g-senza").checked, g = senza ? null : num("#g-gdop");
+      if (!senza && (g == null || !(g > 0))) { toast("Scrivi il GDOP, oppure spunta Controller non disponibile"); $("#g-gdop").focus(); return; }
       const t = Date.now();
-      const c = { id, sessione: sn, punto: nomeP, operatore: (st.oper && st.oper !== "*" ? st.oper : v && v.operatore) || "", n: k || null,
-        previsto_ts: k ? prev : null, ts_misura: t, gdop: g, pdop: num("#g-pdop"), satelliti: num("#g-sat"), nota: $("#g-nota").value.trim(),
-        soglia: Number(IMP.gdop_soglia) || null, intervallo: k ? IMP.gdop_min : null, ts: t, da: DEV };
+      const c = { id, sessione: sn, punto: nomeP, operatore: (v && v.operatore) || "", inserito_da: io() || "Tutti", n: k || null,
+        previsto_ts: k ? prev : null, ts_misura: t, gdop: g, pdop: senza ? null : num("#g-pdop"), satelliti: senza ? null : num("#g-sat"),
+        senza: senza ? $("#g-mot").value : "", nota: $("#g-nota").value.trim(), soglia: Number(IMP.gdop_soglia) || null, intervallo: k ? IMP.gdop_min : null, ts: t, da: DEV };
       CTRL[id] = c; salvaCtrl(); inviaCtrl(c);
-      toast(c.soglia && g > c.soglia ? "GDOP " + String(g).replace(".", ",") + " oltre la soglia " + String(c.soglia).replace(".", ",") : "Controllo salvato");
-      if (c.soglia && g > c.soglia) { bip(4, true); vibra([500, 200, 500]); }
+      if (senza && $("#g-tutti").checked) {
+        const r = reg(sn, nomeP), p0 = snap(r);
+        r.senza_ctrl = { da: k ? prev : t, motivo: c.senza }; registrato(s, nomeP, p0);
+      }
+      if (senza) toast("Segnato: GDOP non verificabile");
+      else {
+        toast(c.soglia && g > c.soglia ? "GDOP " + String(g).replace(".", ",") + " oltre la soglia " + String(c.soglia).replace(".", ",") : "Controllo salvato");
+        if (c.soglia && g > c.soglia) { bip(4, true); vibra([500, 200, 500]); }
+      }
     } else if (x === "dopo") RINVII[id] = Date.now() + 120000;
     d.remove();
     if (st.vista === "dettaglio" || st.vista === "registro") aggiornaVista(); else if (aggiornaVista.dopo) aggiornaVista();
@@ -827,26 +886,40 @@ window.chiediGdop = (sn, nomeP, k, prev) => {
   document.body.appendChild(d);
   setTimeout(() => { const i = $("#g-gdop"); if (i) i.focus(); }, 50);
 };
+/* controller non disponibile per tutto il vertice (o di nuovo disponibile) */
+window.senzaController = (sn, nomeP, si) => {
+  const s = sessione(sn); if (!s) return;
+  const fai = (motivo) => { const r = reg(sn, nomeP), p0 = snap(r); r.senza_ctrl = si ? { da: Date.now(), motivo } : null; registrato(s, nomeP, p0); aggiornaVista(); };
+  if (!si) { fai(); return; }
+  const d = document.createElement("div"); d.className = "dialogo";
+  d.innerHTML = `<div class="box"><div class="grande">Controller non disponibile</div><div class="tenue">${esc(nomeP)}: da adesso i controlli GDOP non si chiedono e risultano "non verificabile".</div>
+    <label class="campo">Motivo</label><select id="sc-mot">${MOTIVI.map((m) => `<option>${esc(m)}</option>`).join("")}</select>
+    <div class="bottoni"><button class="b2" data-x="no">Annulla</button><button class="b" data-x="si">Conferma</button></div></div>`;
+  d.addEventListener("click", (e) => { const x = e.target.dataset.x; if (!x) return; const mot = $("#sc-mot").value; d.remove(); if (x === "si") fai(mot); });
+  document.body.appendChild(d);
+};
+function esitoCtrl(c) { return c.senza ? "non verificabile" : c.soglia && c.gdop > c.soglia ? "oltre soglia" : "ok"; }
+function classeEsito(e) { return e === "oltre soglia" ? "fuori" : e === "non eseguito" ? "fuori" : e === "non verificabile" ? "tenue" : ""; }
 /* tutti i controlli, anche quelli previsti e non fatti */
 function righeControlli() {
   const out = [], visti = new Set(), now = Date.now();
   const N = IMP.gdop_min > 0 ? IMP.gdop_min * 60000 : 0;
   Object.values(CTRL).forEach((c) => {
     visti.add(c.id);
-    const fuori = c.soglia && c.gdop > c.soglia;
-    out.push({ sessione: c.sessione, punto: c.punto, operatore: c.operatore || "", n: c.n || "extra",
+    out.push({ sessione: c.sessione, punto: c.punto, operatore: c.operatore || "", inserito_da: c.inserito_da || c.operatore || "", n: c.n || "extra",
       previsto: c.previsto_ts ? hhmm(c.previsto_ts) : "", eseguito: hhmm(c.ts_misura), ritardo_min: c.previsto_ts ? Math.max(0, Math.round((c.ts_misura - c.previsto_ts) / 60000)) : "",
-      gdop: c.gdop, pdop: c.pdop, satelliti: c.satelliti, soglia: c.soglia, esito: fuori ? "oltre soglia" : "ok", nota: c.nota || "", _t: c.previsto_ts || c.ts_misura });
+      gdop: c.gdop, pdop: c.pdop, satelliti: c.satelliti, soglia: c.soglia, esito: esitoCtrl(c), motivo: c.senza || "", nota: c.nota || "", _t: c.previsto_ts || c.ts_misura });
   });
   if (N) P.sessioni.forEach((s) => s.vertici.forEach((v) => {
     const r = REG[s.n + "|" + v.punto], ini = iniTs(s, r); if (!ini) return;
     const fp = finePrevista(s), fine = r.fin_ts || (r.fine ? tsDa(r.data || s.data, r.fine) : null);
     const lim = Math.min(fine || Infinity, fp ? fp - 60000 : Infinity, now);
     for (let k = 1; ini + k * N <= lim; k++) {
-      const id = ctrlId(s.n, v.punto, k); if (visti.has(id)) continue;
-      if (!fine && now - (ini + k * N) <= N) continue;    // e' il controllo di adesso: c'e' ancora tempo
-      out.push({ sessione: s.n, punto: v.punto, operatore: (r && r.operatore) || v.operatore || "", n: k, previsto: hhmm(ini + k * N), eseguito: "", ritardo_min: "",
-        gdop: null, pdop: null, satelliti: null, soglia: Number(IMP.gdop_soglia) || null, esito: "non eseguito", nota: "", _t: ini + k * N });
+      const id = ctrlId(s.n, v.punto, k), prev = ini + k * N; if (visti.has(id)) continue;
+      const sc = r.senza_ctrl && prev >= (r.senza_ctrl.da || 0);
+      if (!sc && !fine && now - prev <= N) continue;    // e' il controllo di adesso: c'e' ancora tempo
+      out.push({ sessione: s.n, punto: v.punto, operatore: (r && r.operatore) || v.operatore || "", inserito_da: "", n: k, previsto: hhmm(prev), eseguito: "", ritardo_min: "",
+        gdop: null, pdop: null, satelliti: null, soglia: Number(IMP.gdop_soglia) || null, esito: sc ? "non verificabile" : "non eseguito", motivo: sc ? r.senza_ctrl.motivo || "" : "", nota: "", _t: prev });
     }
   }));
   return out.sort((a, b) => a.sessione - b.sessione || String(a.punto).localeCompare(String(b.punto)) || a._t - b._t);
@@ -908,14 +981,14 @@ function righeRegistro() {
       out.push({ sessione: s.n, nome_sessione: s.nome || "", data: r.data || s.data || "", punto: v.punto, ricevitore: v.ric, operatore: r.operatore || v.operatore || "",
         file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", inizio: r.inizio || "", fine: r.fine || "",
         durata_min: ini && fin ? Math.round((fin - ini) / 60000) : null, fine_sessione_calcolata: fp ? hhmm(fp) : "",
-        inizio_previsto: s.inizio, fine_previsto: s.fine, controlli_gdop: cc.length, gdop_max: cc.length ? Math.max(...cc.map((c) => c.gdop)) : null, note: r.note || "" });
+        inizio_previsto: s.inizio, fine_previsto: s.fine, controlli_gdop: cc.length, gdop_max: cc.some((c) => c.gdop != null) ? Math.max(...cc.filter((c) => c.gdop != null).map((c) => c.gdop)) : null, note: r.note || "" });
     });
   });
   return out;
 }
 function vRegistro(m) {
   const rr = righeRegistro(), cc = righeControlli();
-  const nOk = cc.filter((c) => c.esito === "ok").length, nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length;
+  const nOk = cc.filter((c) => c.esito === "ok").length, nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length, nV = cc.filter((c) => c.esito === "non verificabile").length;
   let h = `<div class="scheda"><div class="grande">Registro della campagna</div><div class="tenue">${rr.length} vertici registrati su ${P.sessioni.reduce((a, s) => a + s.vertici.length, 0)} · ${cc.length} controlli GDOP</div>
     <div class="bottoni"><button class="b" onclick="esporta('html')">Registro completo (con foto)</button></div>
     <div class="bottoni"><button class="b2" onclick="esporta('json')">JSON (TERRA)</button><button class="b2" onclick="esporta('csv')">CSV per Excel</button></div>
@@ -925,9 +998,9 @@ function vRegistro(m) {
   else h += `<div class="scheda" style="overflow-x:auto"><b>Vertici</b><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
     ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:'${esc(x.punto)}'})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
       <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
-  if (cc.length) h += `<div class="scheda" style="overflow-x:auto"><b>Controlli GDOP</b> <span class="tenue">· ${nOk} ok · ${nF} oltre soglia · ${nN} non eseguiti</span>
+  if (cc.length) h += `<div class="scheda" style="overflow-x:auto"><b>Controlli GDOP</b> <span class="tenue">· ${nOk} ok · ${nF} oltre soglia · ${nN} non eseguiti · ${nV} non verificabili</span>
     <table><tr><th>S.</th><th>Vertice</th><th>Prev.</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>
-    ${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${c.esito === "ok" ? "" : "fuori"}">${esc(c.esito)}</td></tr>`).join("")}</table></div>`;
+    ${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.gdop != null ? String(c.gdop).replace(".", ",") : ""}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${classeEsito(c.esito)}">${esc(c.esito)}${c.motivo ? '<div class="tenue">' + esc(c.motivo) + "</div>" : ""}</td></tr>`).join("")}</table></div>`;
   m.innerHTML = h;
   collegaImpostazioni();
 }
@@ -961,13 +1034,13 @@ function csv(colonne, righe) {
   return colonne.join(";") + "\r\n" + righe.map((x) => colonne.map((k) => q(x[k])).join(";")).join("\r\n") + "\r\n";
 }
 const COL_REG = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "inizio", "fine", "durata_min", "fine_sessione_calcolata", "inizio_previsto", "fine_previsto", "controlli_gdop", "gdop_max", "note"];
-const COL_CTRL = ["sessione", "punto", "operatore", "n", "previsto", "eseguito", "ritardo_min", "gdop", "pdop", "satelliti", "soglia", "esito", "nota"];
+const COL_CTRL = ["sessione", "punto", "operatore", "inserito_da", "n", "previsto", "eseguito", "ritardo_min", "gdop", "pdop", "satelliti", "soglia", "esito", "motivo", "nota"];
 async function registroHtml(rr, cc, ff, chi) {
   const n3 = (x) => x == null ? "" : Number(x).toFixed(3).replace(".", ",");
   const n1 = (x) => x == null ? "" : String(x).replace(".", ",");
   let foto = "";
   for (const f of ff) foto += `<figure><img src="data:image/jpeg;base64,${await inBase64(f.dati)}" alt=""><figcaption>Sessione ${f.sessione} · ${esc(f.punto)} · ${esc(f.data || "")} ${esc(f.ora)}</figcaption></figure>`;
-  const nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length;
+  const nF = cc.filter((c) => c.esito === "oltre soglia").length, nN = cc.filter((c) => c.esito === "non eseguito").length, nV = cc.filter((c) => c.esito === "non verificabile").length;
   return `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Registro ${esc(P.progetto || "")}</title>
 <style>body{font:14px/1.4 Arial,sans-serif;color:#1D262B;margin:20px}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;border-bottom:2px solid #2F6B4F;padding-bottom:3px}
 .t{color:#6B7780}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border:1px solid #D7DBD4;padding:4px 6px;text-align:left;vertical-align:top}th{background:#EEF2EC}
@@ -979,16 +1052,16 @@ async function registroHtml(rr, cc, ff, chi) {
 <h2>Vertici (${rr.length})</h2>
 <table><tr><th>Sess.</th><th>Data</th><th>Vertice</th><th>Ric.</th><th>Operatore</th><th>File</th><th>H ant. (m)</th><th>Tipo</th><th>Inizio</th><th>Fine</th><th>Durata (min)</th><th>Fine calcolata</th><th>Controlli</th><th>GDOP max</th><th>Note</th></tr>
 ${rr.map((x) => `<tr><td>${x.sessione}</td><td>${esc(x.data)}</td><td><b>${esc(x.punto)}</b></td><td>${x.ricevitore}</td><td>${esc(x.operatore)}</td><td>${esc(x.file)}</td><td>${x.h_antenna != null ? n3(x.h_antenna) : '<span class="f">manca</span>'}</td><td>${esc(x.tipo_altezza)}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td>${x.durata_min != null ? x.durata_min : ""}</td><td>${esc(x.fine_sessione_calcolata)}</td><td>${x.controlli_gdop}</td><td>${n1(x.gdop_max)}</td><td>${esc(x.note)}</td></tr>`).join("")}</table>
-<h2>Controlli (${cc.length}${nF ? ", " + nF + " oltre soglia" : ""}${nN ? ", " + nN + " non eseguiti" : ""})</h2>
-${cc.length ? `<table><tr><th>Sess.</th><th>Vertice</th><th>Operatore</th><th>N.</th><th>Previsto</th><th>Eseguito</th><th>Ritardo (min)</th><th>GDOP</th><th>PDOP</th><th>Satelliti</th><th>Soglia</th><th>Esito</th><th>Note</th></tr>
-${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.operatore)}</td><td>${esc(c.n)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.ritardo_min}</td><td>${n1(c.gdop)}</td><td>${n1(c.pdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td>${n1(c.soglia)}</td><td class="${c.esito === "oltre soglia" ? "f" : c.esito === "non eseguito" ? "n" : ""}">${esc(c.esito)}</td><td>${esc(c.nota)}</td></tr>`).join("")}</table>` : '<p class="t">Nessun controllo.</p>'}
+<h2>Controlli (${cc.length}${nF ? ", " + nF + " oltre soglia" : ""}${nN ? ", " + nN + " non eseguiti" : ""}${nV ? ", " + nV + " non verificabili" : ""})</h2>
+${cc.length ? `<table><tr><th>Sess.</th><th>Vertice</th><th>Operatore</th><th>Inserito da</th><th>N.</th><th>Previsto</th><th>Eseguito</th><th>Ritardo (min)</th><th>GDOP</th><th>PDOP</th><th>Satelliti</th><th>Soglia</th><th>Esito</th><th>Motivo</th><th>Note</th></tr>
+${cc.map((c) => `<tr><td>${c.sessione}</td><td>${esc(c.punto)}</td><td>${esc(c.operatore)}</td><td>${esc(c.inserito_da)}</td><td>${esc(c.n)}</td><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}</td><td>${c.ritardo_min}</td><td>${n1(c.gdop)}</td><td>${n1(c.pdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td>${n1(c.soglia)}</td><td class="${c.esito === "oltre soglia" ? "f" : c.esito === "non eseguito" ? "n" : c.esito === "non verificabile" ? "t" : ""}">${esc(c.esito)}</td><td>${esc(c.motivo)}</td><td>${esc(c.nota)}</td></tr>`).join("")}</table>` : '<p class="t">Nessun controllo.</p>'}
 <h2>Foto (${ff.length})</h2>${foto || '<p class="t">Nessuna foto su questo telefono.</p>'}
 </body></html>`;
 }
 window.esporta = async (tipo) => {
   const rr = righeRegistro(), cc = righeControlli();
   if (!rr.length && !cc.length) { toast("Il registro e' vuoto"); return; }
-  const chi = st.oper && st.oper !== "*" ? st.oper : "tutti";
+  const chi = io() || "tutti";
   const base = (P.progetto || "rete").replace(/[^\w\-]+/g, "_") + "_registro_" + chi.replace(/[^\w\-]+/g, "_") + "_" + oggi().replace(/\//g, "");
   let ff = [];
   try { ff = await fotoElenco(); } catch (e) {}
