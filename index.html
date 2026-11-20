@@ -117,11 +117,13 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.4.1";
+const VERSIONE = "2.4.2";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* testo come stringa JavaScript dentro onclick="...": regge apostrofi e virgolette nei nomi (es. Sant'Angelo) */
+const js = (s) => esc(JSON.stringify(String(s == null ? "" : s)));
 
 function leggi(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function scrivi(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast("Non riesco a salvare sul telefono (memoria piena?)"); return false; } }
@@ -192,7 +194,8 @@ const EN_ESATTE = {
     "Set-up done: press READY. When everyone is ready all phones are alerted; each operator gives the GO with Start now.",
   "Non sono ancora tutti pronti.": "Not everyone is ready yet.", "Inizio lo stesso?": "Start anyway?", "Inizio lo stesso": "Start anyway",
   "Annullo il Pronto di questo vertice?": "Cancel the Ready of this vertex?", "Annulla Pronto": "Cancel Ready", "Pronto segnato": "Ready marked",
-  "Apri il vertice": "Open the vertex"
+  "Apri il vertice": "Open the vertex",
+  "Lo sostituisco con l'ora di adesso?": "Replace it with the current time?", "La sostituisco con l'ora di adesso?": "Replace it with the current time?", "Sostituisci": "Replace"
 };
 const EN_RX = [
   [/^Fine sessione alle (\d\d:\d\d)$/, "End of session at $1"], [/^Fine sessione (\d+)$/, "End of session $1"], [/^TERRA: fine sessione (\d+)$/, "TERRA: end of session $1"],
@@ -216,7 +219,8 @@ const EN_RX = [
   [/^Alle (\d\d:\d\d): ferma il ricevitore(?: su (.+))? e premi Fine ora\.$/, (m, a, b) => "At " + a + ": stop the receiver" + (b ? " on " + b : "") + " and press End now."],
   [/^Sessione (\d+), (.+): leggi il GDOP sul ricevitore\.$/, "Session $1, $2: read the GDOP on the receiver."],
   [/^TERRA Sessioni (\S+) · i dati restano su questo telefono$/, "TERRA Sessioni $1 · data stays on this phone"],
-  [/^Apri (\S+)$/, "Open $1"]
+  [/^Apri (\S+)$/, "Open $1"],
+  [/^Inizio gia' segnato alle (\d\d:\d\d)\.$/, "Start already set at $1."], [/^Fine gia' segnata alle (\d\d:\d\d)\.$/, "End already set at $1."]
 ];
 const EN_FRASI = [
   ["Il registro completo si apre su qualsiasi telefono o PC: tabella dei vertici, tabella dei controlli e foto.", "The full log opens on any phone or PC: vertices table, checks table and photos."],
@@ -417,9 +421,11 @@ window.usaProg = (i) => { apriProgetto(progetti[i].id); vai((P.operatori || []).
 window.togliProg = (i) => {
   chiedi(`Elimino la campagna <b>${esc(progetti[i].nome)}</b> e il suo registro da questo telefono?<br><span class="tenue">Esporta prima il registro se ti serve.</span>`, "Elimina", () => {
     const p = progetti.splice(i, 1)[0];
-    try { localStorage.removeItem(K_REG + p.id); } catch (e) {}
+    // tutto della campagna: registro, controlli, impostazioni, coda, canale, allarmi gia' suonati e foto
+    [K_REG, K_CTRL, K_IMP, K_OUT, K_SYNC, K_SUON].forEach((k) => { try { localStorage.removeItem(k + p.id); } catch (e) {} });
+    fotoTogliProg(p.id).catch(() => {});
     scrivi(K_PROG, progetti);
-    if (st.prog === p.id) { P = null; st.prog = null; }
+    if (st.prog === p.id) { P = null; st.prog = null; REG = {}; CTRL = {}; OUT = []; SUONATI = {}; CANALE = ""; }
     salvaStato(); disegna();
   }, true);
 };
@@ -473,7 +479,7 @@ function vDettaglio(m) {
     <div class="scheda"><div class="riga"><div class="num" style="background:${esc(s.colore)}">${s.n}</div>
     <div style="flex:1"><div class="grande">${esc(nomeSess(s))}</div><div class="tenue">${esc(s.data)} · previsto ${esc(s.inizio)} - ${esc(s.fine)} · durata ${durata()} min</div></div></div>
     <table style="margin-top:8px"><tr><th>Ric.</th><th>Vertice</th><th>Operatore</th><th>Stato</th></tr>
-    ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP('${esc(x.punto)}')" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
+    ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP(${js(x.punto)})" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
       <td>${x.ric}</td><td>${esc(x.punto)}${x.noto ? ' <span class="tenue">(noto)</span>' : ""}</td><td>${esc(x.operatore)}</td>
       <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : rr.pronto_ts ? '<span style="color:var(--verde);font-weight:700">pronto ' + hhmm(rr.pronto_ts) + "</span>" : '<span class="tenue">in attesa</span>'}</td></tr>`; }).join("")}
     </table>
@@ -511,31 +517,33 @@ function vDettaglio(m) {
   const sa = slotAttuale(s, v, Date.now());
   const n1 = (x) => x == null ? "" : String(x).replace(".", ",");
   h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Controlli GDOP</b><div class="tenue">${IMP.gdop_min > 0 ? "ogni " + IMP.gdop_min + " min, soglia " + n1(IMP.gdop_soglia) : "a tempo non attivi (Registro &gt; Impostazioni)"}</div></div>
-    <button class="b2" onclick="chiediGdop(${s.n},'${esc(v.punto)}',0,Date.now())">Controllo ora</button></div>
-    ${sa ? `<div class="avviso" style="margin:8px 0 0">Controllo n. ${sa.k} delle ${hhmm(sa.prev)} da fare${v.operatore !== st.oper ? " (" + esc(v.operatore) + ")" : ""} <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="chiediGdop(${s.n},'${esc(v.punto)}',${sa.k},${sa.prev})">Inserisci</button></div>` : ""}
-    ${r.senza_ctrl ? `<div class="avviso" style="margin:8px 0 0">Controller non disponibile dalle ${hhmm(r.senza_ctrl.da)} (${esc(r.senza_ctrl.motivo || "")}) <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="senzaController(${s.n},'${esc(v.punto)}',false)">Di nuovo disponibile</button></div>`
-      : `<div class="bottoni"><button class="b2" onclick="senzaController(${s.n},'${esc(v.punto)}',true)">Controller non disponibile</button></div>`}
-    ${cc.length ? `<table style="margin-top:6px"><tr><th>Previsto</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>${cc.map((c) => `<tr ${c.esito === "non eseguito" ? `onclick="chiediGdop(${s.n},'${esc(v.punto)}',${c.n},${c._t})" style="cursor:pointer"` : ""}><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}${c.inserito_da && c.inserito_da !== c.operatore ? '<div class="tenue">da ' + esc(c.inserito_da) + "</div>" : ""}</td><td>${n1(c.gdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${classeEsito(c.esito)}">${esc(c.esito)}${c.esito === "non eseguito" ? ' <span class="tenue">(tocca per inserirlo)</span>' : c.motivo ? '<div class="tenue">' + esc(c.motivo) + "</div>" : ""}</td></tr>`).join("")}</table>` : `<div class="tenue" style="margin-top:6px">Nessun controllo.</div>`}</div>`;
+    <button class="b2" onclick="chiediGdop(${s.n},${js(v.punto)},0,Date.now())">Controllo ora</button></div>
+    ${sa ? `<div class="avviso" style="margin:8px 0 0">Controllo n. ${sa.k} delle ${hhmm(sa.prev)} da fare${v.operatore !== st.oper ? " (" + esc(v.operatore) + ")" : ""} <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="chiediGdop(${s.n},${js(v.punto)},${sa.k},${sa.prev})">Inserisci</button></div>` : ""}
+    ${r.senza_ctrl ? `<div class="avviso" style="margin:8px 0 0">Controller non disponibile dalle ${hhmm(r.senza_ctrl.da)} (${esc(r.senza_ctrl.motivo || "")}) <button class="b2" style="margin-left:6px;padding:6px 10px" onclick="senzaController(${s.n},${js(v.punto)},false)">Di nuovo disponibile</button></div>`
+      : `<div class="bottoni"><button class="b2" onclick="senzaController(${s.n},${js(v.punto)},true)">Controller non disponibile</button></div>`}
+    ${cc.length ? `<table style="margin-top:6px"><tr><th>Previsto</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>${cc.map((c) => `<tr ${c.esito === "non eseguito" ? `onclick="chiediGdop(${s.n},${js(v.punto)},${c.n},${c._t})" style="cursor:pointer"` : ""}><td>${esc(c.previsto)}</td><td>${esc(c.eseguito)}${c.inserito_da && c.inserito_da !== c.operatore ? '<div class="tenue">da ' + esc(c.inserito_da) + "</div>" : ""}</td><td>${n1(c.gdop)}</td><td>${c.satelliti != null ? c.satelliti : ""}</td><td class="${classeEsito(c.esito)}">${esc(c.esito)}${c.esito === "non eseguito" ? ' <span class="tenue">(tocca per inserirlo)</span>' : c.motivo ? '<div class="tenue">' + esc(c.motivo) + "</div>" : ""}</td></tr>`).join("")}</table>` : `<div class="tenue" style="margin-top:6px">Nessun controllo.</div>`}</div>`;
   // foto
   h += `<div class="scheda"><div class="riga"><div style="flex:1"><b>Foto</b><div class="tenue">del vertice o del centramento (restano sul telefono e vanno nel registro)</div></div>
     <button class="b2" id="b-foto">Aggiungi foto</button></div><div class="foto" id="foto-l"></div>
     <input type="file" id="file-foto" accept="image/*" capture="environment" hidden></div>`;
   m.innerHTML = h;
+  /* i campi di QUESTO vertice: un salvataggio in ritardo (nota) non deve leggere il modulo di un altro vertice aperto nel frattempo */
+  const eH = $("#hant"), eI = $("#ini"), eF = $("#fin"), eN = $("#note");
   /* si salva solo il campo che l'utente ha cambiato: un modulo rimasto indietro (dati arrivati da un altro
      telefono mentre si scriveva) non deve riscrivere gli altri campi */
   const salva = (campo, p0) => {
     const x = reg(s.n, v.punto);
     if (!p0 || !p0.__snap) p0 = snap(x);
-    if (campo === "hant") { const hv = $("#hant").value.replace(",", ".").trim(); x.hant = hv === "" ? null : Number(hv); }
+    if (campo === "hant") { const hv = eH.value.replace(",", ".").trim(); x.hant = hv === "" ? null : Number(hv); }
     if (campo === "ini") {
-      const ini = $("#ini").value || "";
+      const ini = eI.value || "";
       if (ini !== (x.inizio || "")) { x.data = x.data || (ini ? oggi() : ""); x.ini_ts = ini ? tsDa(x.data || s.data, ini) : null; x.inizio = ini; }
     }
     if (campo === "fin") {
-      const fin = $("#fin").value || "";
+      const fin = eF.value || "";
       if (fin !== (x.fine || "")) { x.fin_ts = fin ? tsDa(x.data || s.data, fin) : null; if (x.fin_ts && x.ini_ts && x.fin_ts < x.ini_ts) x.fin_ts += 86400000; x.fine = fin; }
     }
-    if (campo === "note") x.note = $("#note").value;
+    if (campo === "note") x.note = eN.value;
     if (!x.operatore) x.operatore = v.operatore;
     registrato(s, v.punto, p0);
   };
@@ -564,17 +572,25 @@ function vDettaglio(m) {
     avvisoFine(s);
     disegna();
     };
+    // inizio gia' segnato: un secondo tocco non deve cancellare l'ora vera (sposterebbe la fine sessione per tutti)
+    const gia = reg(s.n, v.punto).inizio;
+    if (gia) { chiedi("<div>Inizio gia' segnato alle " + esc(gia) + ".</div><div>Lo sostituisco con l'ora di adesso?</div>", "Sostituisci", fai); return; }
     // il VIA lo da' sempre l'operatore: se non sono ancora tutti pronti chiede conferma
     if (pronti(s) && pronti(s) < s.vertici.length) { chiedi("<div>Non sono ancora tutti pronti.</div><div>" + esc(trS("Si aspetta: ") + attesi(s)) + "</div><div>Inizio lo stesso?</div>", "Inizio lo stesso", fai); return; }
     fai();
   });
   $("#b-fin").addEventListener("click", () => {
     if (!$("#hant").value) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
+    const gia = reg(s.n, v.punto).fine;
+    if (gia) { chiedi("<div>Fine gia' segnata alle " + esc(gia) + ".</div><div>La sostituisco con l'ora di adesso?</div>", "Sostituisci", fineOra); return; }
+    fineOra();
+  });
+  const fineOra = () => {
     const x = reg(s.n, v.punto), t = Date.now(), p0 = snap(x);
     if (!$("#ini").value) { x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio; x.data = x.data || oggi(); }
     x.fin_ts = t; x.fine = hhmm(t); $("#fin").value = x.fine;
     salva(x.hant == null ? "hant" : "", p0); toast("Fine " + x.fine + ": vertice registrato"); disegna();
-  });
+  };
   $("#b-foto").addEventListener("click", () => $("#file-foto").click());
   $("#file-foto").addEventListener("change", async (e) => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
@@ -839,6 +855,7 @@ function rimandaPropri() {
     invia(msgVertice(Number(k.slice(0, i)), k.slice(i + 1), x));
   });
   Object.values(CTRL).forEach((c) => inviaCtrl(c));
+  if (IMP.ts) inviaImp();   // durata e controlli GDOP: anche a chi apre il file dopo 12 ore
   SYNC.inviato = Date.now(); scrivi(K_SYNC + st.prog, SYNC);
 }
 function avviaCondivisione() { inLinea = null; rimandaPropri(); svuota(); ricevi(); }
@@ -1039,7 +1056,7 @@ window.chiediGdop = (sn, nomeP, k, prev) => {
     <div id="g-no" hidden><label class="campo">Motivo</label><select id="g-mot">${MOTIVI.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("")}</select>
       <div class="interr" style="border:0"><div>Anche per i prossimi controlli di questo vertice<div class="tenue">non li chiede piu' e nel registro risultano "non verificabile"</div></div><input type="checkbox" id="g-tutti"></div></div>
     <label class="campo">Note</label><input type="text" id="g-nota" placeholder="es. perdita segnale, ostacoli">
-    <div class="bottoni">${auto ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
+    <div class="bottoni">${k && mioV ? '<button class="b2" data-x="dopo">Fra 2 minuti</button>' : '<button class="b2" data-x="annulla">Annulla</button>'}<button class="b" data-x="ok">Salva controllo</button></div></div>`;
   d.querySelector("#g-senza").addEventListener("change", (e) => { d.querySelector("#g-con").hidden = e.target.checked; d.querySelector("#g-no").hidden = !e.target.checked; });
   d.addEventListener("click", (e) => {
     const x = e.target.dataset.x; if (!x) return;
@@ -1127,6 +1144,14 @@ async function fotoScrivi(f, togli) {
   const d = await fotoDb();
   return new Promise((ok, ko) => { const t = d.transaction("foto", "readwrite"); togli ? t.objectStore("foto").delete(f) : t.objectStore("foto").put(f); t.oncomplete = () => ok(); t.onerror = () => ko(t.error); });
 }
+async function fotoTogliProg(id) {
+  const d = await fotoDb();
+  return new Promise((ok) => {
+    const t = d.transaction("foto", "readwrite"), q = t.objectStore("foto").openCursor();
+    q.onsuccess = () => { const c = q.result; if (!c) return; if (c.value.prog === id) c.delete(); c.continue(); };
+    t.oncomplete = () => ok(); t.onerror = () => ok();
+  });
+}
 async function riduci(file, lato) {
   let img;
   try { img = await createImageBitmap(file, { imageOrientation: "from-image" }); }
@@ -1178,7 +1203,7 @@ function vRegistro(m) {
   h += vImpostazioni();
   if (!rr.length) h += `<div class="vuoto">Ancora nessun vertice registrato.</div>`;
   else h += `<div class="scheda" style="overflow-x:auto"><b>Vertici</b><table><tr><th>S.</th><th>Vertice</th><th>H ant. (m)</th><th>Inizio</th><th>Fine</th><th>Note</th></tr>
-    ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:'${esc(x.punto)}'})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
+    ${rr.map((x) => `<tr onclick="vai('dettaglio',{sess:${x.sessione},punto:${js(x.punto)}})"><td>${x.sessione}</td><td><b>${esc(x.punto)}</b><div class="tenue">${esc(x.operatore)}</div></td>
       <td>${x.h_antenna != null ? x.h_antenna.toFixed(3).replace(".", ",") : '<span style="color:var(--rosso)">manca</span>'}</td><td>${esc(x.inizio)}</td><td>${esc(x.fine)}</td><td class="tenue nt">${esc(x.note)}</td></tr>`).join("")}</table></div>`;
   if (cc.length) h += `<div class="scheda" style="overflow-x:auto"><b>Controlli GDOP</b> <span class="tenue">· ${nOk} ok · ${nF} oltre soglia · ${nN} non eseguiti · ${nV} non verificabili</span>
     <table><tr><th>S.</th><th>Vertice</th><th>Prev.</th><th>Fatto</th><th>GDOP</th><th>Sat.</th><th>Esito</th></tr>
