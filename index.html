@@ -117,7 +117,7 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.3";
+const VERSIONE = "2.4";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
@@ -184,12 +184,22 @@ const EN_ESATTE = {
     "It must be the .json file from GPS network design > Export > For the field app. If the problem persists, save the file on the phone and use \"Open sessions file\".",
   "Fine sessione": "End of session", "Controllo GDOP ": "GDOP check", "Prova dell'allarme di fine sessione": "End-of-session alarm test",
   "Durata e controlli GDOP valgono per tutti: cambiati qui, arrivano agli altri telefoni.": "Duration and GDOP checks apply to everyone: changed here, they reach the other phones.",
-  "Allarme anche a telefono bloccato: installa l'app": "Alarm also with the phone locked: install the"
+  "Allarme anche a telefono bloccato: installa l'app": "Alarm also with the phone locked: install the",
+  "PRONTO (messa in stazione fatta)": "READY (set-up done)", "Inizio ora (VIA)": "Start now (GO)", "in stazione": "setting up", "Tutti pronti": "All ready",
+  "· avvia la registrazione e premi Inizio ora (VIA)": "· start recording and press Start now (GO)",
+  "Avvia la registrazione sul ricevitore e premi Inizio ora (VIA).": "Start recording on the receiver and press Start now (GO).",
+  "Messa in stazione fatta: premi PRONTO. Quando sono tutti pronti arriva l'avviso a tutti; il VIA lo da' ogni operatore con Inizio ora.":
+    "Set-up done: press READY. When everyone is ready all phones are alerted; each operator gives the GO with Start now.",
+  "Non sono ancora tutti pronti.": "Not everyone is ready yet.", "Inizio lo stesso?": "Start anyway?", "Inizio lo stesso": "Start anyway",
+  "Annullo il Pronto di questo vertice?": "Cancel the Ready of this vertex?", "Annulla Pronto": "Cancel Ready", "Pronto segnato": "Ready marked",
+  "Apri il vertice": "Open the vertex"
 };
 const EN_RX = [
   [/^Fine sessione alle (\d\d:\d\d)$/, "End of session at $1"], [/^Fine sessione (\d+)$/, "End of session $1"], [/^TERRA: fine sessione (\d+)$/, "TERRA: end of session $1"],
   [/^tra (\d+):(\d\d)$/, "in $1:$2"], [/^tra (\d+) h (\d+) min$/, "in $1 h $2 min"], [/^finita da (\d+) min$/, "ended $1 min ago"],
-  [/^Partiti (\d+) di (\d+)$/, "Started $1 of $2"], [/^· la fine si calcola quando parte l'ultimo ricevitore \(\+ (\d+) min\)$/, "· the end is calculated when the last receiver starts (+ $1 min)"],
+  [/^Partiti (\d+) di (\d+)$/, "Started $1 of $2"], [/^Pronti (\d+) di (\d+)$/, "Ready $1 of $2"], [/^· si aspetta: (.+)$/, "· waiting for: $1"],
+  [/^pronto (\d\d:\d\d)$/, "ready $1"], [/^Tutti pronti · Sessione (\d+)$/, "All ready · Session $1"], [/^Si aspetta: (.+)$/, "Waiting for: $1"],
+  [/^✓ Pronto dalle (\d\d:\d\d) · tocca per annullare$/, "✓ Ready since $1 · tap to cancel"], [/^· la fine si calcola quando parte l'ultimo ricevitore \(\+ (\d+) min\)$/, "· the end is calculated when the last receiver starts (+ $1 min)"],
   [/^tutti i (\d+) ricevitori partiti · ultimo alle (\d\d:\d\d) \+ (\d+) min(?: · (\d+) gia' chiusi)?$/, (m, a, b, c, d) => "all " + a + " receivers started · last at " + b + " + " + c + " min" + (d ? " · " + d + " already closed" : "")],
   [/^Sessione chiusa: tutti i (\d+) ricevitori hanno la fine\.$/, "Session closed: all $1 receivers have an end time."],
   [/^Sono passati (\d+) minuti dall'ultimo ricevitore partito \(fine alle$/, "$1 minutes have passed since the last receiver started (end at"],
@@ -465,7 +475,7 @@ function vDettaglio(m) {
     <table style="margin-top:8px"><tr><th>Ric.</th><th>Vertice</th><th>Operatore</th><th>Stato</th></tr>
     ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP('${esc(x.punto)}')" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
       <td>${x.ric}</td><td>${esc(x.punto)}${x.noto ? ' <span class="tenue">(noto)</span>' : ""}</td><td>${esc(x.operatore)}</td>
-      <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : "-"}</td></tr>`; }).join("")}
+      <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : rr.pronto_ts ? '<span style="color:var(--verde);font-weight:700">pronto ' + hhmm(rr.pronto_ts) + "</span>" : '<span class="tenue">in stazione</span>'}</td></tr>`; }).join("")}
     </table>
     ${rigaFine(s, false)}
     <div class="tenue" style="margin-top:8px">Basi: ${(s.basi || []).map((b) => esc(b[0] + " - " + b[1])).join(", ")}</div>
@@ -486,10 +496,13 @@ function vDettaglio(m) {
     <input type="number" inputmode="decimal" step="0.001" id="hant" value="${r.hant != null ? esc(r.hant) : ""}" placeholder="es. 1,567">
     <label class="campo">Come e' misurata</label>
     <div class="seg" id="tipoh">${["verticale", "inclinata"].map((t) => `<button class="${(r.tipoh || "verticale") === t ? "att" : ""}" data-t="${t}">${t}</button>`).join("")}</div>
+    ${r.inizio ? "" : r.pronto_ts ? `<button class="b2" id="b-pronto" style="width:100%;margin-top:12px;padding:14px;font-size:17px;color:var(--verde);font-weight:700">&#10003; Pronto dalle ${hhmm(r.pronto_ts)} &middot; tocca per annullare</button>`
+      : `<button class="b" id="b-pronto" style="width:100%;margin-top:12px;padding:15px;font-size:18px">PRONTO (messa in stazione fatta)</button>`}
+    ${r.inizio ? "" : `<div class="tenue" style="margin-top:6px">Messa in stazione fatta: premi PRONTO. Quando sono tutti pronti arriva l'avviso a tutti; il VIA lo da' ogni operatore con Inizio ora.</div>`}
     <div class="riga" style="margin-top:12px;gap:8px">
       <div style="flex:1"><label class="campo" style="margin-top:0">Inizio</label><input type="time" id="ini" value="${esc(r.inizio || "")}"></div>
       <div style="flex:1"><label class="campo" style="margin-top:0">Fine</label><input type="time" id="fin" value="${esc(r.fine || "")}"></div></div>
-    <div class="bottoni"><button class="b arancio" id="b-ini">Inizio ora</button><button class="b" id="b-fin">Fine ora</button></div>
+    <div class="bottoni"><button class="b arancio" id="b-ini">Inizio ora (VIA)</button><button class="b" id="b-fin">Fine ora</button></div>
     <label class="campo">Note (centramento, ostacoli, problemi...)</label>
     <textarea id="note">${esc(r.note || "")}</textarea>
     <div class="tenue" style="margin-top:6px">Tutto viene salvato subito sul telefono${IMP.condividi ? " e mandato agli altri quando c'e' internet" : ""}.</div></div>`;
@@ -532,13 +545,28 @@ function vDettaglio(m) {
     const x = reg(s.n, v.punto), p0 = snap(x); x.tipoh = b.dataset.t; registrato(s, v.punto, p0);
     document.querySelectorAll("#tipoh button").forEach((c) => c.classList.toggle("att", c === b));
   }));
+  const bp = $("#b-pronto");
+  if (bp) bp.addEventListener("click", () => {
+    chiediPermessi();
+    const x = reg(s.n, v.punto);
+    if (x.pronto_ts) { chiedi("Annullo il Pronto di questo vertice?", "Annulla Pronto", () => { const y = reg(s.n, v.punto), p0 = snap(y); delete y.pronto_ts; registrato(s, v.punto, p0); disegna(); }); return; }
+    const hv = $("#hant").value.replace(",", ".").trim();
+    if (hv === "" || isNaN(Number(hv))) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
+    const p0 = snap(x); x.hant = Number(hv); x.pronto_ts = Date.now(); if (!x.operatore) x.operatore = v.operatore;
+    registrato(s, v.punto, p0); toast("Pronto segnato"); disegna();
+  });
   $("#b-ini").addEventListener("click", () => {
+    const fai = () => {
     const x = reg(s.n, v.punto), t = Date.now(), p0 = snap(x);
     x.data = oggi(); x.ini_ts = t; x.inizio = hhmm(t); $("#ini").value = x.inizio;
     chiediPermessi();
     salva("", p0); toast("Inizio " + x.inizio);
     avvisoFine(s);
     disegna();
+    };
+    // il VIA lo da' sempre l'operatore: se non sono ancora tutti pronti chiede conferma
+    if (pronti(s) && pronti(s) < s.vertici.length) { chiedi("<div>Non sono ancora tutti pronti.</div><div>" + esc(trS("Si aspetta: ") + attesi(s)) + "</div><div>Inizio lo stesso?</div>", "Inizio lo stesso", fai); return; }
+    fai();
   });
   $("#b-fin").addEventListener("click", () => {
     if (!$("#hant").value) { toast("Scrivi l'altezza d'antenna"); $("#hant").focus(); return; }
@@ -779,7 +807,7 @@ function applica(m) {
 }
 /* gruppi di campi di un vertice: ognuno con la sua ora di modifica, cosi' due telefoni che cambiano campi
    diversi dello stesso vertice (anche senza rete) non si cancellano a vicenda */
-const GRUPPI = { ini: ["inizio", "ini_ts", "data"], fin: ["fine", "fin_ts"], hant: ["hant"], tipoh: ["tipoh"], note: ["note"], op: ["operatore"], sc: ["senza_ctrl"] };
+const GRUPPI = { ini: ["inizio", "ini_ts", "data"], fin: ["fine", "fin_ts"], hant: ["hant"], tipoh: ["tipoh"], note: ["note"], op: ["operatore"], sc: ["senza_ctrl"], pr: ["pronto_ts"] };
 function snap(x) { const o = { __snap: 1 }; for (const g in GRUPPI) o[g] = JSON.stringify(GRUPPI[g].map((f) => x[f] == null ? null : x[f])); return o; }
 function msgVertice(sn, nomeP, x) {
   const y = { t: Object.assign({}, x.t || {}) };
@@ -841,9 +869,17 @@ function contoRovescia(f) {
   const mm = Math.floor(d / 60), ss = d % 60;
   return "tra " + (mm >= 60 ? Math.floor(mm / 60) + " h " + (mm % 60) + " min" : mm + ":" + String(ss).padStart(2, "0"));
 }
+function pronti(s) { return s.vertici.filter((v) => { const r = REG[s.n + "|" + v.punto] || {}; return r.pronto_ts || iniTs(s, r); }).length; }
+function attesi(s) { return s.vertici.filter((v) => { const r = REG[s.n + "|" + v.punto] || {}; return !r.pronto_ts && !iniTs(s, r); }).map((v) => v.punto + (v.operatore ? " (" + v.operatore + ")" : "")).join(", "); }
+function trS(t) { return t; }
 function rigaFine(s, breve) {
   const n = s.vertici.length, pa = partiti(s), fi = finiti(s);
-  if (!pa) return "";
+  if (!pa) {
+    const pr = pronti(s);
+    if (!pr) return "";
+    if (pr < n) return `<div class="fineprev"><b>Pronti ${pr} di ${n}</b> <span class="tenue">· si aspetta: ${esc(attesi(s))}</span></div>`;
+    return `<div class="fineprev" style="border-color:var(--verde)"><b>Tutti pronti</b> <span class="tenue">· avvia la registrazione e premi Inizio ora (VIA)</span></div>`;
+  }
   if (fi === n) return breve ? "" : `<div class="tenue" style="margin-top:8px">Sessione chiusa: tutti i ${n} ricevitori hanno la fine.</div>`;
   const f = finePrevista(s);
   if (!f) return `<div class="fineprev"><b>Partiti ${pa} di ${n}</b> <span class="tenue">· la fine si calcola quando parte l'ultimo ricevitore (+ ${durata()} min)</span></div>`;
@@ -904,10 +940,27 @@ function allarmeFine(s, f) {
   });
   document.body.appendChild(d);
 }
+function allarmePronti(s) {
+  const mio = st.oper && st.oper !== "*" ? s.vertici.find((v) => v.operatore === st.oper) : null;
+  notifica("Tutti pronti · Sessione " + s.n, "Avvia la registrazione sul ricevitore e premi Inizio ora (VIA).", "pronti" + s.n);
+  vibra([500, 200, 500, 200, 500]); bip(4, false);
+  document.querySelectorAll(".dialogo.allarme").forEach((d) => d.remove());
+  const d = document.createElement("div"); d.className = "dialogo allarme";
+  d.innerHTML = `<div class="box"><div class="grande" style="color:var(--verde)">Tutti pronti · Sessione ${s.n}</div>
+    <p>Avvia la registrazione sul ricevitore e premi Inizio ora (VIA).</p>
+    <div class="bottoni"><button class="b2" data-x="chiudi">Chiudi</button><button class="b" data-x="apri">${mio ? "Apri il vertice" : "Apri la sessione"}</button></div></div>`;
+  d.addEventListener("click", (e) => {
+    const x = e.target.dataset.x; if (!x) return;
+    d.remove();
+    if (x === "apri") vai("dettaglio", { sess: s.n, punto: mio ? mio.punto : null });
+    if (aggiornaVista.dopo) aggiornaVista();
+  });
+  document.body.appendChild(d); traduciNodo(d);
+}
 /* schermo acceso mentre ci sono sessioni in corso (altrimenti il telefono dorme e non suona) */
 let wl = null;
 async function schermoAcceso(forza) {
-  const serve = P && IMP.schermo && P.sessioni.some((s) => interessa(s) && partiti(s) && finiti(s) < s.vertici.length);
+  const serve = P && IMP.schermo && P.sessioni.some((s) => interessa(s) && (partiti(s) || pronti(s)) && finiti(s) < s.vertici.length);
   if (serve && (!wl || forza) && "wakeLock" in navigator && document.visibilityState === "visible") {
     try { const w = await navigator.wakeLock.request("screen"); if (wl) try { wl.release(); } catch (e) {} wl = w; wl.addEventListener("release", () => { if (wl === w) wl = null; }); } catch (e) {}
   } else if (!serve && wl) { try { wl.release(); } catch (e) {} wl = null; }
@@ -922,6 +975,11 @@ function controllaTempi() {
     el.classList.toggle("scaduta", f <= now);
   });
   P.sessioni.forEach((s) => {
+    // tutti pronti (messa in stazione finita su tutti i vertici) e nessuno ancora partito: avviso a tutti
+    if (interessa(s) && !partiti(s) && pronti(s) === s.vertici.length) {
+      const ult = Math.max(...s.vertici.map((v) => (REG[s.n + "|" + v.punto] || {}).pronto_ts || 0)), kp = s.n + "|pronti|" + ult;
+      if (!SUONATI[kp] && now - ult < 30 * 60000) { SUONATI[kp] = now; scrivi(K_SUON + st.prog, SUONATI); allarmePronti(s); }
+    }
     const f = finePrevista(s); if (!f) return;
     const k = s.n + "|" + f;
     if (now >= f && now - f < 20 * 60000 && !SUONATI[k] && interessa(s) && finiti(s) < s.vertici.length) {
@@ -1099,11 +1157,11 @@ function righeRegistro() {
   P.sessioni.forEach((s) => {
     const fp = finePrevista(s);
     s.vertici.forEach((v) => {
-      const r = REG[s.n + "|" + v.punto]; if (!r || (!r.inizio && !r.fine && r.hant == null && !r.note)) return;
+      const r = REG[s.n + "|" + v.punto]; if (!r || (!r.inizio && !r.fine && r.hant == null && !r.note && !r.pronto_ts)) return;
       const cc = Object.values(CTRL).filter((c) => c.sessione === s.n && c.punto === v.punto);
       const ini = iniTs(s, r), fin = r.fin_ts || (r.fine ? tsDa(r.data || s.data, r.fine) : null);
       out.push({ sessione: s.n, nome_sessione: s.nome || "", data: r.data || s.data || "", punto: v.punto, ricevitore: v.ric, operatore: r.operatore || v.operatore || "",
-        file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", inizio: r.inizio || "", fine: r.fine || "",
+        file: v.file, h_antenna: r.hant, tipo_altezza: r.tipoh || "verticale", pronto: r.pronto_ts ? hhmm(r.pronto_ts) : "", inizio: r.inizio || "", fine: r.fine || "",
         durata_min: ini && fin ? Math.round((fin - ini) / 60000) : null, fine_sessione_calcolata: fp ? hhmm(fp) : "",
         inizio_previsto: s.inizio, fine_previsto: s.fine, controlli_gdop: cc.length, gdop_max: cc.some((c) => c.gdop != null) ? Math.max(...cc.filter((c) => c.gdop != null).map((c) => c.gdop)) : null, note: r.note || "" });
     });
@@ -1157,7 +1215,7 @@ function csv(colonne, righe) {
   const q = (v) => { v = v == null ? "" : typeof v === "number" ? String(v).replace(".", ",") : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   return colonne.join(";") + "\r\n" + righe.map((x) => colonne.map((k) => q(x[k])).join(";")).join("\r\n") + "\r\n";
 }
-const COL_REG = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "inizio", "fine", "durata_min", "fine_sessione_calcolata", "inizio_previsto", "fine_previsto", "controlli_gdop", "gdop_max", "note"];
+const COL_REG = ["sessione", "nome_sessione", "data", "punto", "ricevitore", "operatore", "file", "h_antenna", "tipo_altezza", "pronto", "inizio", "fine", "durata_min", "fine_sessione_calcolata", "inizio_previsto", "fine_previsto", "controlli_gdop", "gdop_max", "note"];
 const COL_CTRL = ["sessione", "punto", "operatore", "inserito_da", "n", "previsto", "eseguito", "ritardo_min", "gdop", "pdop", "satelliti", "soglia", "esito", "motivo", "nota"];
 async function registroHtml(rr, cc, ff, chi) {
   const n3 = (x) => x == null ? "" : Number(x).toFixed(3).replace(".", ",");

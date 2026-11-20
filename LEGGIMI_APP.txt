@@ -48,12 +48,97 @@ INSTALLARLA SUL TELEFONO
 IN CAMPAGNA
 1. In ufficio: in TERRA, Progetto reti GPS > "Per l'app di campagna...".
    Manda il file .json ai colleghi (WhatsApp, email, cloud).
-2. Sul telefono: Progetti > "Apri file delle sessioni" e scegli il file.
+2. Sul telefono:
+   - Android: in WhatsApp (o email, Drive) tieni premuto il file >
+     Condividi > TERRA Sessioni. Si apre l'app con il file caricato.
+   - iPhone: Progetti > "Apri file delle sessioni" e scegli il file
+     (da WhatsApp prima "Salva su File": iOS non permette alle app
+     installate dal browser di ricevere file condivisi).
    Scegli chi sei (operatore): l'app mette in evidenza i tuoi vertici.
 3. Per ogni sessione: apri il tuo vertice, raggiungilo (Naviga o bussola),
-   scrivi l'altezza d'antenna, premi "Inizio ora" e a fine misura
-   "Fine ora". Le note servono per centramento, ostacoli, problemi.
+   fai la messa in stazione, scrivi l'altezza d'antenna e premi PRONTO.
+   Quando arriva "Tutti pronti" avvia il ricevitore e premi "Inizio ora
+   (VIA)"; a fine misura "Fine ora". Le note servono per centramento,
+   ostacoli, problemi.
 4. A fine giornata: Registro > "Invia registro (TERRA)".
+
+STATO CONDIVISO TRA I TELEFONI (quando c'e' internet)
+- Tutti i telefoni con lo stesso file delle sessioni si collegano da soli
+  allo stesso canale (servizio gratuito ntfy.sh; il nome del canale e'
+  ricavato dal file, senza il file non si indovina). Passano inizio, fine,
+  altezze d'antenna, note, controlli GDOP e impostazioni; le foto no.
+- Senza rete l'app funziona come prima: i dati restano in coda e partono
+  appena torna il segnale. In alto: "in linea" / "non in linea".
+- Si spegne in Registro > Impostazioni > Stato condiviso.
+
+MESSA IN STAZIONE E PRONTO (dalla versione 2.4 dell'app)
+- Finita la messa in stazione, l'operatore scrive l'altezza d'antenna e
+  preme PRONTO (senza altezza l'app non lo accetta). Nella sessione tutti
+  vedono "pronto 08:12" o "in stazione" per ogni vertice e la riga
+  "Pronti 3 di 4 - si aspetta: V113 (Antonio)".
+- All'ultimo Pronto tutti i telefoni della sessione (e il capo squadra)
+  ricevono l'avviso "Tutti pronti" con suono, vibrazione e notifica.
+- Il VIA lo da' sempre l'operatore: avvia la registrazione sul
+  ricevitore e preme "Inizio ora (VIA)". Se non sono ancora tutti
+  pronti, l'app chiede conferma. Da li' la fine si calcola come prima.
+- Un Pronto sbagliato si annulla toccando di nuovo il pulsante.
+- Il Pronto passa dal canale condiviso (serve internet); nel registro
+  CSV e JSON c'e' la colonna "pronto" con l'ora.
+
+FINE SESSIONE E ALLARME
+- Quando parte l'ultimo ricevitore della sessione, la fine si calcola da
+  sola: ultimo inizio + durata della sessione (Registro > Impostazioni,
+  vale per tutti). Tutti i telefoni vedono l'ora e il conto alla rovescia.
+- Alla fine: suono, vibrazione, notifica e finestra "Fine sessione" sui
+  telefoni degli operatori della sessione e del capo squadra (Tutti).
+- Lo schermo resta acceso durante le sessioni: a schermo spento il
+  telefono non lascia suonare un'app aperta dal browser.
+- Allarme anche a telefono bloccato: installa l'app ntfy (Play Store /
+  App Store) e iscriviti all'argomento indicato in Registro > Impostazioni
+  (finisce con -avvisi). Il telefono che fa partire l'ultimo ricevitore
+  programma l'avviso per l'ora di fine.
+
+CONTROLLO GDOP A TEMPO
+- Registro > Impostazioni: "Controllo GDOP ogni (min)" e soglia. Ogni N
+  minuti dall'inizio l'app suona e chiede il GDOP letto sul ricevitore
+  (anche PDOP, satelliti e note). Oltre la soglia avvisa. "Controllo ora"
+  nella scheda del vertice per un controllo in piu'.
+- I controlli saltati restano nel registro come "non eseguito".
+
+CAPO SQUADRA CHE E' ANCHE OPERATORE
+- In "Chi sei?" scegli il tuo nome e spunta "Sono anche capo squadra":
+  vedi e compili tutte le sessioni e i vertici dei colleghi e ricevi tutti
+  gli allarmi di fine sessione; i controlli GDOP a tempo li chiede solo per
+  i tuoi vertici. "Tutti" resta per chi non ha un ricevitore.
+- Se un collega non ha rete puoi scrivere tu inizio, fine, altezza e note
+  del suo vertice e inserire i suoi controlli GDOP ("Inserisci" o tocco sul
+  controllo "non eseguito"): nel registro compare chi li ha inseriti.
+- Quando il collega torna in linea i dati si uniscono campo per campo:
+  vince la modifica piu' recente di ogni campo (inizio, fine, altezza,
+  note), senza cancellare quelli scritti dagli altri.
+
+SENZA CONTROLLER
+- Nel controllo GDOP: "Controller non disponibile" con il motivo (spento
+  o scarico, non disponibile, ...). Il controllo risulta "non verificabile".
+- "Anche per i prossimi controlli di questo vertice", oppure il pulsante
+  "Controller non disponibile" nella scheda del vertice: l'app non chiede
+  piu' il GDOP finche' non premi "Di nuovo disponibile".
+
+LINGUA / LANGUAGE
+- Italiano o English: in fondo alla pagina Progetti o in "Chi sei?". Ogni
+  telefono sceglie la sua lingua (all'inizio quella del telefono). Il registro
+  esportato resta in italiano per l'ufficio.
+- Italian or English: at the bottom of the Projects page or in "Who are you?".
+  Each phone has its own language. The exported log stays in Italian.
+
+FOTO
+- Nella scheda del vertice: Aggiungi foto (fotocamera o galleria). Restano
+  sul telefono e vanno nel registro completo e nel JSON.
+
+REGISTRO
+- Registro completo (con foto): file HTML che si apre ovunque, con la
+  tabella dei vertici, la tabella di tutti i controlli e le foto.
+- CSV per Excel: vertici e, sotto, la tabella dei controlli. JSON: tutto.
 
 AGGIORNARE L'APP
 Quando arriva una nuova versione di TERRA con l'app cambiata, ricarica

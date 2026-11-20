@@ -1,5 +1,5 @@
 // TERRA Sessioni: tiene l'app sul telefono, cosi' si apre anche senza internet.
-const CACHE = "terra-sessioni-2.3";
+const CACHE = "terra-sessioni-2.4";
 const FILE = ["./", "index.html", "manifest.webmanifest", "icona-192.png", "icona-512.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
