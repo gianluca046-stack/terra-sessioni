@@ -74,7 +74,7 @@ STATO CONDIVISO TRA I TELEFONI (quando c'e' internet)
 MESSA IN STAZIONE E PRONTO (dalla versione 2.4 dell'app)
 - Finita la messa in stazione, l'operatore scrive l'altezza d'antenna e
   preme PRONTO (senza altezza l'app non lo accetta). Nella sessione tutti
-  vedono "pronto 08:12" o "in stazione" per ogni vertice e la riga
+  vedono "pronto 08:12" o "in attesa" per ogni vertice e la riga
   "Pronti 3 di 4 - si aspetta: V113 (Antonio)".
 - All'ultimo Pronto tutti i telefoni della sessione (e il capo squadra)
   ricevono l'avviso "Tutti pronti" con suono, vibrazione e notifica.

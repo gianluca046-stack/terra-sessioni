@@ -117,7 +117,7 @@
    salva sul telefono quello che si scrive (altezza d'antenna, orari veri, note) ed esporta il
    registro della campagna in JSON e CSV. Misure in metri.
    ====================================================================== */
-const VERSIONE = "2.4";
+const VERSIONE = "2.4.1";
 const K_PROG = "terra_sess_progetti", K_REG = "terra_sess_reg_", K_STATO = "terra_sess_stato";
 const K_CTRL = "terra_sess_ctrl_", K_IMP = "terra_sess_imp_", K_OUT = "terra_sess_out_", K_SYNC = "terra_sess_sync_", K_SUON = "terra_sess_suon_", K_DEV = "terra_sess_dev";
 const $ = (s) => document.querySelector(s);
@@ -185,7 +185,7 @@ const EN_ESATTE = {
   "Fine sessione": "End of session", "Controllo GDOP ": "GDOP check", "Prova dell'allarme di fine sessione": "End-of-session alarm test",
   "Durata e controlli GDOP valgono per tutti: cambiati qui, arrivano agli altri telefoni.": "Duration and GDOP checks apply to everyone: changed here, they reach the other phones.",
   "Allarme anche a telefono bloccato: installa l'app": "Alarm also with the phone locked: install the",
-  "PRONTO (messa in stazione fatta)": "READY (set-up done)", "Inizio ora (VIA)": "Start now (GO)", "in stazione": "setting up", "Tutti pronti": "All ready",
+  "PRONTO (messa in stazione fatta)": "READY (set-up done)", "Inizio ora (VIA)": "Start now (GO)", "in attesa": "waiting", "Tutti pronti": "All ready",
   "· avvia la registrazione e premi Inizio ora (VIA)": "· start recording and press Start now (GO)",
   "Avvia la registrazione sul ricevitore e premi Inizio ora (VIA).": "Start recording on the receiver and press Start now (GO).",
   "Messa in stazione fatta: premi PRONTO. Quando sono tutti pronti arriva l'avviso a tutti; il VIA lo da' ogni operatore con Inizio ora.":
@@ -475,7 +475,7 @@ function vDettaglio(m) {
     <table style="margin-top:8px"><tr><th>Ric.</th><th>Vertice</th><th>Operatore</th><th>Stato</th></tr>
     ${vv.map((x) => { const rr = REG[s.n + "|" + x.punto] || {}; return `<tr onclick="scegliP('${esc(x.punto)}')" style="${x.punto === st.punto ? "background:#EEF5F0" : ""}${mieiP.includes(x.punto) && st.oper !== "*" ? ";font-weight:700" : ""}">
       <td>${x.ric}</td><td>${esc(x.punto)}${x.noto ? ' <span class="tenue">(noto)</span>' : ""}</td><td>${esc(x.operatore)}</td>
-      <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : rr.pronto_ts ? '<span style="color:var(--verde);font-weight:700">pronto ' + hhmm(rr.pronto_ts) + "</span>" : '<span class="tenue">in stazione</span>'}</td></tr>`; }).join("")}
+      <td>${rr.fine ? "&#10003; " + esc(rr.fine) : rr.inizio ? "dalle " + esc(rr.inizio) : rr.pronto_ts ? '<span style="color:var(--verde);font-weight:700">pronto ' + hhmm(rr.pronto_ts) + "</span>" : '<span class="tenue">in attesa</span>'}</td></tr>`; }).join("")}
     </table>
     ${rigaFine(s, false)}
     <div class="tenue" style="margin-top:8px">Basi: ${(s.basi || []).map((b) => esc(b[0] + " - " + b[1])).join(", ")}</div>
